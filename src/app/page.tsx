@@ -1,111 +1,134 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 
-export default function PhotoBooth() {
-  const videoRef = useRef<HTMLVideoElement>(null);
+export default function Home() {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const [streaming, setStreaming] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [step, setStep] = useState<"camera" | "preview" | "result">("camera");
+  const [resultImage, setResultImage] = useState<string | null>(null);
 
-  // 1. 카메라 시작 함수 (모바일 호환성 강화)
+  // 1. 카메라 시작
   const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: "user", 
-          width: { ideal: 1280 }, 
-          height: { ideal: 720 } 
-        },
-        audio: false,
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        // 모바일 브라우저 대응: 비디오 로드 완료 후 재생 보장
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play();
-          setIsCameraOpen(true);
-        };
-      }
-    } catch (err) {
-      console.error("카메라 에러:", err);
-      alert("카메라 권한을 허용해주세요! (설정 -> 브라우저 -> 카메라 허용)");
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
+    });
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play();
+      setStreaming(true);
     }
   };
 
-  // 2. 사진 찍기 함수 (4:3 비율 유지)
+  // 2. 사진 찍기 (4장)
   const takePhoto = () => {
-    if (photos.length >= 4) return;
+    if (!videoRef.current) return;
 
     const canvas = document.createElement("canvas");
-    canvas.width = 800;
-    canvas.height = 600;
-    const ctx = canvas.getContext("2d");
+    const context = canvas.getContext("2d");
 
-    if (videoRef.current && ctx) {
-      ctx.drawImage(videoRef.current, 0, 0, 800, 600);
-      const dataUrl = canvas.toDataURL("image/png");
-      setPhotos((prev) => [...prev, dataUrl]);
-    }
+    canvas.width = 300;
+    canvas.height = 400;
+
+    context?.drawImage(videoRef.current, 0, 0, 300, 400);
+
+    const imageData = canvas.toDataURL("image/png");
+
+    setPhotos((prev) => {
+      const updated = [...prev, imageData];
+      if (updated.length === 4) {
+        setStep("preview");
+      }
+      return updated;
+    });
+  };
+
+  // 3. 4컷 합성
+  const makeStrip = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = 300;
+    canvas.height = 1200;
+
+    photos.forEach((img, i) => {
+      const image = new Image();
+      image.src = img;
+
+      image.onload = () => {
+        ctx.drawImage(image, 0, i * 300, 300, 300);
+
+        if (i === 3) {
+          const final = canvas.toDataURL("image/png");
+          setResultImage(final);
+          setStep("result");
+        }
+      };
+    });
   };
 
   return (
-    <main className="min-h-screen bg-black text-white flex flex-col items-center p-4 select-none">
-      <h1 className="text-xl font-bold my-4 uppercase tracking-widest italic">
-        Soykko <span className="text-blue-500">Booth</span>
-      </h1>
+    <div style={{ textAlign: "center", padding: 20 }}>
+      <h1>📸 Soykko Booth</h1>
 
-      {/* 카메라 뷰파인더: 기존 디자인 및 구조 보존 */}
-      <div className="relative w-full max-w-md aspect-[4/3] bg-zinc-900 rounded-2xl overflow-hidden border-2 border-zinc-700">
-        {!isCameraOpen ? (
-          <button 
-            onClick={startCamera}
-            className="absolute inset-0 bg-blue-600 font-bold hover:bg-blue-700 transition-colors active:scale-95"
-          >
-            카메라 시작하기
-          </button>
-        ) : (
-          <video 
-            ref={videoRef} 
-            autoPlay 
-            muted       // 모바일 자동재생 필수
-            playsInline // 전체화면 방지 필수
-            className="w-full h-full object-cover" 
-          />
-        )}
-      </div>
+      {/* CAMERA STEP */}
+      {step === "camera" && (
+        <div>
+          <video ref={videoRef} style={{ width: 300, borderRadius: 10 }} />
+          <br />
 
-      {/* 촬영 버튼: UI/UX Lock 적용 (기존 디자인 유지) */}
-      <div className="mt-8">
-        <button
-          onClick={takePhoto}
-          disabled={!isCameraOpen || photos.length >= 4}
-          className="w-20 h-20 bg-white rounded-full border-8 border-zinc-600 active:scale-90 disabled:opacity-30 transition-all shadow-2xl"
-        />
-      </div>
-
-      {/* 네컷 결과물 미리보기: 화이트 프레임 디자인 고정 */}
-      <div className="mt-10 bg-white p-3 w-48 shadow-2xl flex flex-col gap-1.5 transform rotate-1">
-        {[0, 1, 2, 3].map((idx) => (
-          <div key={idx} className="w-full aspect-[4/3] bg-zinc-100 overflow-hidden border border-zinc-200">
-            {photos[idx] && (
-              <img src={photos[idx]} className="w-full h-full object-cover" alt={`cut-${idx}`} />
-            )}
-          </div>
-        ))}
-        <div className="text-[10px] text-zinc-400 text-center font-black mt-1 tracking-tighter">
-          SOYKKO-BOOTH.COM
+          {!streaming ? (
+            <button onClick={startCamera}>카메라 시작</button>
+          ) : (
+            <button onClick={takePhoto}>
+              촬영 ({photos.length}/4)
+            </button>
+          )}
         </div>
-      </div>
-
-      {/* 하단 컨트롤 */}
-      {photos.length > 0 && (
-        <button 
-          onClick={() => setPhotos([])}
-          className="mt-6 text-sm text-zinc-500 underline active:text-white"
-        >
-          다시 찍기 (Reset)
-        </button>
       )}
-    </main>
+
+      {/* PREVIEW STEP */}
+      {step === "preview" && (
+        <div>
+          <h2>프레임 생성 중...</h2>
+          <button onClick={makeStrip}>합성하기</button>
+        </div>
+      )}
+
+      {/* RESULT STEP */}
+      {step === "result" && resultImage && (
+        <div>
+          <h2>완성!</h2>
+          <img src={resultImage} style={{ width: 300 }} />
+
+          <br />
+          <a href={resultImage} download="booth.png">
+            다운로드
+          </a>
+
+          <br /><br />
+
+          <button
+            onClick={() => {
+              setPhotos([]);
+              setResultImage(null);
+              setStep("camera");
+            }}
+          >
+            다시 찍기
+          </button>
+        </div>
+      )}
+
+      {/* hidden canvas */}
+      <canvas ref={canvasRef} style={{ display: "none" }} />
+    </div>
   );
 }
