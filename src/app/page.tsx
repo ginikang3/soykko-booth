@@ -14,12 +14,10 @@ export default function Home() {
   const [isShooting, setIsShooting] = useState(false);
   const [flash, setFlash] = useState(false);
 
-  // 🔊 소리 (public 폴더에 넣어야함)
-  const shutterSound = typeof window !== "undefined"
-    ? new Audio("/shutter.mp3")
-    : null;
+  const shutterSound =
+    typeof window !== "undefined" ? new Audio("/shutter.mp3") : null;
 
-  // 카메라 시작
+  // 📸 카메라 시작
   const startCamera = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user" },
@@ -32,7 +30,7 @@ export default function Home() {
     }
   };
 
-  // 📸 캡쳐 (mirror 포함)
+  // 📸 캡쳐 (4:3 + mirror)
   const capture = () => {
     if (!videoRef.current) return null;
 
@@ -40,8 +38,8 @@ export default function Home() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
 
-    const width = 300;
-    const height = 400;
+    const width = 400;
+    const height = 300;
 
     canvas.width = width;
     canvas.height = height;
@@ -63,7 +61,6 @@ export default function Home() {
       sy = (video.videoHeight - sh) / 2;
     }
 
-    // 🔥 mirror 적용
     ctx?.save();
     ctx?.scale(-1, 1);
     ctx?.drawImage(video, sx, sy, sw, sh, -width, 0, width, height);
@@ -86,11 +83,9 @@ export default function Home() {
 
       setCountdown(null);
 
-      // 플래시
       setFlash(true);
       setTimeout(() => setFlash(false), 120);
 
-      // 소리
       if (shutterSound) {
         shutterSound.currentTime = 0;
         shutterSound.play();
@@ -103,11 +98,10 @@ export default function Home() {
     }
 
     setIsShooting(false);
-
     makeStrip(tempPhotos);
   };
 
-  // 🧠 합성
+  // 🧠 합성 (가이드 포함)
   const makeStrip = (photoList: string[]) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -115,17 +109,39 @@ export default function Home() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    canvas.width = 300;
-    canvas.height = 1200;
+    canvas.width = 460;
+    canvas.height = 1390;
+
+    // 배경
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 460, 1390);
 
     photoList.forEach((img, i) => {
       const image = new Image();
       image.src = img;
 
       image.onload = () => {
-        ctx.drawImage(image, 0, i * 300, 300, 300);
+        const x = 30;
+        const y = 40 + i * 310;
+
+        // 📸 사진
+        ctx.drawImage(image, x, y, 400, 300);
+
+        // 🧪 가이드 박스
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, 400, 300);
 
         if (i === 3) {
+          // 하단 영역
+          ctx.fillStyle = "#f5f5f5";
+          ctx.fillRect(0, 1270, 460, 120);
+
+          ctx.fillStyle = "#333";
+          ctx.font = "22px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText("SOYKKO", 230, 1335);
+
           const final = canvas.toDataURL("image/png");
           setResultImage(final);
           setStep("result");
@@ -198,20 +214,12 @@ export default function Home() {
           justify-content: center;
         }
 
-        .title {
-          margin-bottom: 20px;
-        }
-
-        .cameraBox {
-          position: relative;
-        }
-
         .video {
           width: 300px;
-          aspect-ratio: 3/4;
+          aspect-ratio: 4/3;
           object-fit: cover;
           border-radius: 16px;
-          transform: scaleX(-1); /* 🔥 거울모드 */
+          transform: scaleX(-1);
         }
 
         .count {
@@ -240,10 +248,7 @@ export default function Home() {
         }
 
         .shoot {
-          position: absolute;
-          bottom: -70px;
-          left: 50%;
-          transform: translateX(-50%);
+          margin-top: 15px;
           width: 70px;
           height: 70px;
           border-radius: 50%;
@@ -253,32 +258,8 @@ export default function Home() {
           border: none;
         }
 
-        .resultBox {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 12px;
-        }
-
         .result {
           width: 300px;
-          border-radius: 12px;
-        }
-
-        .download {
-          background: #22c55e;
-          padding: 10px 20px;
-          border-radius: 999px;
-          color: white;
-          text-decoration: none;
-        }
-
-        .reset {
-          background: #444;
-          padding: 10px 20px;
-          border-radius: 999px;
-          border: none;
-          color: white;
         }
       `}</style>
     </div>
