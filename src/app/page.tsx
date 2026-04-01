@@ -38,16 +38,22 @@ export default function Home() {
   const [flash, setFlash] = useState(false);
   const [filter, setFilter] = useState("soft");
 
-  const shutterSound = typeof window !== "undefined" ? new Audio("/shutter.mp3") : null;
+  const shutterSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    shutterSoundRef.current = new Audio("/shutter.mp3");
+  }, []);
 
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" },
+        audio: false,
       });
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        await videoRef.current.play();
         setStreaming(true);
       }
     } catch {
@@ -55,78 +61,132 @@ export default function Home() {
     }
   };
 
+  // ✅ 핵심 수정: 비율 안깨지게 crop (cover 방식)
   const capture = () => {
     if (!videoRef.current) return null;
+
     const video = videoRef.current;
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
-    const width = LAYOUT.w;
-    const height = LAYOUT.h;
-    canvas.width = width;
-    canvas.height = height;
     if (!ctx) return null;
-    ctx.translate(width, 0);
+
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+
+    const outW = LAYOUT.w;
+    const outH = LAYOUT.h;
+
+    canvas.width = outW;
+    canvas.height = outH;
+
+    const videoRatio = vw / vh;
+    const canvasRatio = outW / outH;
+
+    let sx = 0,
+      sy = 0,
+      sw = vw,
+      sh = vh;
+
+    if (videoRatio > canvasRatio) {
+      sw = vh * canvasRatio;
+      sx = (vw - sw) / 2;
+    } else {
+      sh = vw / canvasRatio;
+      sy = (vh - sh) / 2;
+    }
+
+    ctx.translate(outW, 0);
     ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, width, height);
+
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH);
+
     return canvas.toDataURL("image/png");
   };
 
   const loadImage = (src: string) =>
     new Promise<HTMLImageElement>((resolve) => {
-      const img = new Image();
+      const img = new window.Image();
       img.src = src;
       img.onload = () => resolve(img);
     });
 
-  const renderImage = async (frameSrc: string, isDownload = false) => {
+  const renderImage = async (
+    frameSrc: string,
+    photoList: string[] = photos,
+    filterKey: string = filter,
+    isDownload = false
+  ) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
     const scale = isDownload ? 2 : 1;
+
     canvas.width = LAYOUT.canvasW * scale;
     canvas.height = LAYOUT.canvasH * scale;
+
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const images = await Promise.all(photos.map(loadImage));
+
+    const images = await Promise.all(photoList.map(loadImage));
+
     images.forEach((img, i) => {
-      ctx.filter = FILTERS[filter].value;
-      ctx.drawImage(img, LAYOUT.x * scale, LAYOUT.yList[i] * scale, LAYOUT.w * scale, LAYOUT.h * scale);
+      ctx.filter = FILTERS[filterKey].value;
+      ctx.drawImage(
+        img,
+        LAYOUT.x * scale,
+        LAYOUT.yList[i] * scale,
+        LAYOUT.w * scale,
+        LAYOUT.h * scale
+      );
     });
+
     ctx.filter = "none";
+
     const frame = await loadImage(frameSrc);
     ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+
     const final = canvas.toDataURL("image/png");
     setResultImage(final);
   };
 
-  useEffect(() => {
-    if (photos.length === 4) {
-      renderImage(selectedFrame);
-    }
-  }, [photos]);
-
   const startAutoShoot = async () => {
     if (isShooting) return;
     setIsShooting(true);
+
     const temp: string[] = [];
+
     for (let i = 0; i < 4; i++) {
       for (let t = 5; t > 0; t--) {
         setCountdown(t);
         await new Promise((r) => setTimeout(r, 1000));
       }
+
       setCountdown(null);
+
       setFlash(true);
-      setTimeout(() => setFlash(false), 100);
-      shutterSound?.play();
+      setTimeout(() => setFlash(false), 120);
+
+      shutterSoundRef.current?.play().catch(() => {});
+
       const img = capture();
       if (img) temp.push(img);
-      await new Promise((r) => setTimeout(r, 500));
+
+      await new Promise((r) => setTimeout(r, 400));
     }
+
     setPhotos(temp);
     setIsShooting(false);
     setStep("preview");
   };
+
+  useEffect(() => {
+    if (photos.length === 4) {
+      renderImage(selectedFrame, photos, filter);
+    }
+  }, [photos]);
 
   const shareLink = async () => {
     await navigator.clipboard.writeText(window.location.href);
@@ -140,113 +200,117 @@ export default function Home() {
 
   const shareFacebook = () => {
     const url = encodeURIComponent(window.location.href);
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, "_blank");
+    window.open(
+      `https://www.facebook.com/sharer/sharer.php?u=${url}`,
+      "_blank"
+    );
   };
 
   return (
     <div className="container">
       <header className="header">
-        <h1 className="logo animate-fade">SOYKKO <span>BOOTH</span></h1>
+        <h1 className="logo">
+          SOYKKO <span>BOOTH</span>
+        </h1>
       </header>
 
-      {/* 📸 CAMERA STEP */}
+      {/* CAMERA */}
       {step === "camera" && (
-        <div className="mainContent animate-up">
-          <div className={`cameraContainer ${isShooting ? 'active-shoot' : ''}`}>
-            <video ref={videoRef} autoPlay muted playsInline className="video" />
-            {countdown !== null && <div className="count">{countdown}</div>}
+        <div className="mainContent">
+          <div className={`cameraContainer ${isShooting ? "active" : ""}`}>
+            <video ref={videoRef} autoPlay playsInline muted className="video" />
+
+            {countdown !== null && (
+              <div className="count">{countdown}</div>
+            )}
+
             {flash && <div className="flash" />}
           </div>
 
           <div className="actionArea">
             {!streaming ? (
-              <button className="btn-main pulse" onClick={startCamera}>카메라 연결하기</button>
+              <button className="btn-main" onClick={startCamera}>
+                카메라 연결
+              </button>
             ) : (
-              <button 
-                className="btn-shoot-circle" 
-                disabled={isShooting} 
-                onClick={startAutoShoot}
-              >
-                {isShooting ? "..." : "START"}
+              <button className="btn-shoot" onClick={startAutoShoot}>
+                START
               </button>
             )}
-            <p className="hint-text">{isShooting ? "촬영 중입니다. 카메라를 봐주세요!" : "버튼을 누르면 5초 간격으로 4번 촬영합니다."}</p>
           </div>
         </div>
       )}
 
-      {/* 🖼 PREVIEW STEP */}
+      {/* PREVIEW */}
       {step === "preview" && (
-        <div className="mainContent animate-up">
-          <div className="result-layout">
-            {resultImage && <img src={resultImage} className="display-photo shadow-xl" alt="result" />}
-            
-            <div className="edit-controls">
-              <section className="control-section">
-                <label>FILTERS</label>
-                <div className="filter-chips">
-                  {Object.entries(FILTERS).map(([key, f]) => (
-                    <button
-                      key={key}
-                      className={filter === key ? "chip active" : "chip"}
-                      onClick={async () => {
-                        setFilter(key);
-                        await renderImage(selectedFrame);
-                      }}
-                    >
-                      {f.name}
-                    </button>
-                  ))}
-                </div>
-              </section>
+        <div className="mainContent">
+          {resultImage && (
+            <img src={resultImage} className="preview" alt="" />
+          )}
 
-              <section className="control-section">
-                <label>FRAMES</label>
-                <div className="frame-list">
-                  {frames.map((f) => (
-                    <div
-                      key={f}
-                      className={`frame-item ${selectedFrame === f ? "active" : ""}`}
-                      onClick={async () => {
-                        setSelectedFrame(f);
-                        await renderImage(f);
-                      }}
-                    >
-                      <img src={f} alt="frame-thumb" />
-                    </div>
-                  ))}
-                </div>
-              </section>
+          <div className="panel">
+            <div className="section">
+              <p>FILTER</p>
+              <div className="row">
+                {Object.entries(FILTERS).map(([k, v]) => (
+                  <button
+                    key={k}
+                    className={filter === k ? "active" : ""}
+                    onClick={() => {
+                      setFilter(k);
+                      renderImage(selectedFrame, photos, k);
+                    }}
+                  >
+                    {v.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="section">
+              <p>FRAME</p>
+              {frames.map((f) => (
+                <img
+                  key={f}
+                  src={f}
+                  className={selectedFrame === f ? "f active" : "f"}
+                  onClick={() => {
+                    setSelectedFrame(f);
+                    renderImage(f, photos, filter);
+                  }}
+                />
+              ))}
             </div>
           </div>
 
-          <div className="footer-actions">
-            <button className="btn-main w-full" onClick={async () => {
-              await renderImage(selectedFrame, true);
+          <button
+            className="btn-main"
+            onClick={async () => {
+              await renderImage(selectedFrame, photos, filter, true);
               setStep("result");
-            }}>완료 및 다운로드</button>
-          </div>
+            }}
+          >
+            DOWNLOAD
+          </button>
         </div>
       )}
 
-      {/* 💾 RESULT STEP */}
+      {/* RESULT */}
       {step === "result" && resultImage && (
-        <div className="mainContent animate-up">
-          <img src={resultImage} className="display-photo final" alt="final-result" />
+        <div className="mainContent">
+          <img src={resultImage} className="preview" />
 
-          <div className="share-panel">
-            <p className="share-title">SHARE WITH FRIENDS</p>
-            <div className="share-buttons">
-              <button onClick={shareLink} className="share-btn">Link</button>
-              <button onClick={shareWhatsApp} className="share-btn wa">WhatsApp</button>
-              <button onClick={shareFacebook} className="share-btn fb">Facebook</button>
-            </div>
-          </div>
+          <button onClick={shareLink}>LINK</button>
+          <button onClick={shareWhatsApp}>WA</button>
+          <button onClick={shareFacebook}>FB</button>
 
-          <div className="footer-actions vertical">
-            <a href={resultImage} download="soykko_booth.png" className="btn-main w-full no-underline">이미지 저장하기</a>
-            <button className="btn-sub w-full" onClick={() => window.location.reload()}>다시 촬영하기</button>
-          </div>
+          <a href={resultImage} download>
+            SAVE
+          </a>
+
+          <button onClick={() => window.location.reload()}>
+            RETRY
+          </button>
         </div>
       )}
 
@@ -256,82 +320,73 @@ export default function Home() {
         .container {
           max-width: 480px;
           margin: 0 auto;
-          background: #09090b;
-          color: #f4f4f5;
+          background: #000;
+          color: white;
           min-height: 100vh;
-          padding: 24px;
-          font-family: 'Pretendard', -apple-system, sans-serif;
+          padding: 20px;
         }
 
-        .header { padding-bottom: 32px; text-align: center; }
-        .logo { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.5px; opacity: 0.8; }
-        .logo span { color: #3b82f6; }
-
-        .mainContent { display: flex; flex-direction: column; align-items: center; gap: 24px; }
-
-        /* 📸 Camera Section */
         .cameraContainer {
-          position: relative;
           width: 100%;
-          aspect-ratio: 4/3;
-          background: #18181b;
-          border-radius: 24px;
+          height: 60vh;
           overflow: hidden;
-          border: 1px solid #27272a;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+          border-radius: 20px;
+          position: relative;
         }
-        .active-shoot { border: 2px solid #3b82f6; box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
 
-        .video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        .count { position: absolute; inset: 0; display: flex; items: center; justify-content: center; font-size: 100px; font-weight: 900; color: white; text-shadow: 0 4px 20px rgba(0,0,0,0.4); z-index: 10; }
-        .flash { position: absolute; inset: 0; background: white; z-index: 20; }
-
-        .actionArea { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; }
-        .btn-main { background: #3b82f6; color: white; border: none; padding: 16px 32px; border-radius: 16px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.2s; }
-        .btn-main:active { transform: scale(0.96); opacity: 0.9; }
-        .no-underline { text-decoration: none; text-align: center; }
-
-        .btn-shoot-circle {
-          width: 80px; height: 80px; border-radius: 50%; background: white; color: black; border: 8px solid #27272a; font-weight: 900; font-size: 0.75rem; cursor: pointer; transition: all 0.2s;
+        .video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transform: scaleX(-1);
         }
-        .btn-shoot-circle:active { transform: scale(0.9); }
-        .hint-text { font-size: 0.75rem; color: #71717a; text-align: center; }
 
-        /* 🖼 Preview Section */
-        .result-layout { display: flex; gap: 20px; align-items: flex-start; width: 100%; }
-        .display-photo { width: 180px; border-radius: 4px; border: 1px solid #27272a; }
-        .display-photo.final { width: 220px; }
+        .count {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          font-size: 80px;
+        }
 
-        .edit-controls { flex: 1; display: flex; flex-direction: column; gap: 24px; }
-        .control-section label { display: block; font-size: 0.7rem; font-weight: 800; color: #3b82f6; margin-bottom: 12px; letter-spacing: 1px; }
+        .flash {
+          position: absolute;
+          inset: 0;
+          background: white;
+          opacity: 0.8;
+        }
 
-        .filter-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-        .chip { background: #18181b; border: 1px solid #27272a; color: #a1a1aa; padding: 6px 12px; border-radius: 99px; font-size: 0.75rem; cursor: pointer; }
-        .chip.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+        .preview {
+          width: 100%;
+          border-radius: 10px;
+        }
 
-        .frame-list { display: flex; flex-direction: column; gap: 10px; }
-        .frame-item { width: 50px; height: 70px; border-radius: 6px; overflow: hidden; border: 2px solid transparent; opacity: 0.4; cursor: pointer; transition: 0.2s; }
-        .frame-item.active { border-color: #3b82f6; opacity: 1; transform: scale(1.05); }
-        .frame-item img { width: 100%; height: 100%; object-fit: cover; }
+        .f {
+          width: 50px;
+          opacity: 0.4;
+        }
 
-        .footer-actions { width: 100%; margin-top: 20px; }
-        .footer-actions.vertical { display: flex; flex-direction: column; gap: 12px; }
-        .btn-sub { background: #18181b; color: #71717a; border: 1px solid #27272a; padding: 16px; border-radius: 16px; font-weight: 600; cursor: pointer; }
+        .f.active {
+          opacity: 1;
+          border: 2px solid blue;
+        }
 
-        /* 🔗 Share Section */
-        .share-panel { width: 100%; background: #18181b; padding: 20px; border-radius: 20px; text-align: center; }
-        .share-title { font-size: 0.65rem; font-weight: 800; color: #71717a; margin-bottom: 16px; }
-        .share-buttons { display: flex; gap: 8px; }
-        .share-btn { flex: 1; background: #27272a; border: none; color: white; padding: 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
-        .share-btn.wa { background: #25D366; color: white; }
-        .share-btn.fb { background: #1877F2; color: white; }
+        .btn-main {
+          width: 100%;
+          padding: 16px;
+          background: blue;
+          color: white;
+          border-radius: 12px;
+        }
 
-        /* Animations */
-        .animate-up { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .pulse { animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
-        .w-full { width: 100%; }
+        .btn-shoot {
+          width: 80px;
+          height: 80px;
+          border-radius: 50%;
+          background: white;
+          color: black;
+        }
       `}</style>
     </div>
   );
