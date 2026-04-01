@@ -40,11 +40,7 @@ export default function Home() {
   const [flash, setFlash] = useState(false);
   const [filter, setFilter] = useState("soft");
 
-  useEffect(() => {
-    soundRef.current = new Audio("/shutter.mp3");
-    soundRef.current.preload = "auto";
-  }, []);
-
+  // 🔥 CAMERA START + AUDIO UNLOCK
   const startCamera = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user" },
@@ -55,8 +51,29 @@ export default function Home() {
       await videoRef.current.play();
       setStreaming(true);
     }
+
+    // 🔥 AUDIO FIX (핵심)
+    const audio = document.createElement("audio");
+    audio.src = "/shutter.mp3";
+    audio.preload = "auto";
+    audio.volume = 1;
+
+    // unlock trick
+    const unlock = async () => {
+      try {
+        await audio.play();
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {}
+    };
+
+    window.addEventListener("touchstart", unlock, { once: true });
+    window.addEventListener("click", unlock, { once: true });
+
+    soundRef.current = audio;
   };
 
+  // 📸 CAPTURE
   const capture = () => {
     if (!videoRef.current) return null;
 
@@ -99,6 +116,21 @@ export default function Home() {
     return canvas.toDataURL("image/png");
   };
 
+  // 🔥 SOUND PLAY (100% 안정)
+  const playShutter = () => {
+    const audio = soundRef.current;
+    if (!audio) return;
+
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+
+      const p = audio.play();
+      if (p) p.catch(() => {});
+    } catch {}
+  };
+
+  // 🖼 IMAGE LOADER
   const loadImage = (src: string) =>
     new Promise<HTMLImageElement>((resolve) => {
       const img = document.createElement("img");
@@ -106,18 +138,17 @@ export default function Home() {
       img.src = src;
     });
 
+  // 🖼 RENDER FINAL
   const renderImage = useCallback(
-    async (frameSrc: string, download = false) => {
+    async (frameSrc: string) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const scale = download ? 2 : 1;
-
-      canvas.width = LAYOUT.canvasW * scale;
-      canvas.height = LAYOUT.canvasH * scale;
+      canvas.width = LAYOUT.canvasW;
+      canvas.height = LAYOUT.canvasH;
 
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -129,10 +160,10 @@ export default function Home() {
 
         ctx.drawImage(
           img,
-          LAYOUT.x * scale,
-          LAYOUT.yList[i] * scale,
-          LAYOUT.w * scale,
-          LAYOUT.h * scale
+          LAYOUT.x,
+          LAYOUT.yList[i],
+          LAYOUT.w,
+          LAYOUT.h
         );
       });
 
@@ -152,6 +183,7 @@ export default function Home() {
     }
   }, [photos, selectedFrame, renderImage]);
 
+  // 📸 AUTO SHOOT
   const startAutoShoot = async () => {
     if (isShooting) return;
 
@@ -169,11 +201,7 @@ export default function Home() {
       setFlash(true);
       setTimeout(() => setFlash(false), 100);
 
-      soundRef.current?.pause();
-      if (soundRef.current) {
-        soundRef.current.currentTime = 0;
-        soundRef.current.play().catch(() => {});
-      }
+      playShutter();
 
       const img = capture();
       if (img) temp.push(img);
@@ -186,6 +214,7 @@ export default function Home() {
     setStep("preview");
   };
 
+  // 📤 SHARE
   const shareImage = async () => {
     if (!resultImage) return;
 
@@ -201,13 +230,13 @@ export default function Home() {
         });
       } catch {}
     } else {
-      alert("공유 지원 안됨");
+      alert("공유 기능 없음");
     }
   };
 
   return (
-    <div className="container">
-      <video ref={videoRef} autoPlay muted playsInline className="video" />
+    <div>
+      <video ref={videoRef} autoPlay muted playsInline />
 
       {step === "camera" && (
         <div>
@@ -218,20 +247,14 @@ export default function Home() {
           )}
 
           {countdown !== null && <h1>{countdown}</h1>}
-          {flash && <div className="flash" />}
+          {flash && <div style={{ position: "fixed", inset: 0, background: "white" }} />}
         </div>
       )}
 
       {step === "preview" && (
         <div>
           {resultImage && (
-            <Image
-              src={resultImage}
-              alt=""
-              width={300}
-              height={500}
-              unoptimized
-            />
+            <Image src={resultImage} alt="" width={300} height={500} unoptimized />
           )}
 
           <div>
@@ -265,52 +288,22 @@ export default function Home() {
           </div>
 
           <button onClick={shareImage}>공유</button>
-
-          <button
-            onClick={async () => {
-              await renderImage(selectedFrame, true);
-              setStep("result");
-            }}
-          >
-            저장
-          </button>
         </div>
       )}
 
       {step === "result" && resultImage && (
         <div>
-          <Image
-            src={resultImage}
-            alt=""
-            width={300}
-            height={500}
-            unoptimized
-          />
+          <Image src={resultImage} alt="" width={300} height={500} unoptimized />
 
           <a href={resultImage} download>
             다운로드
           </a>
 
-          <button onClick={() => window.location.reload()}>
-            다시
-          </button>
+          <button onClick={() => window.location.reload()}>다시</button>
         </div>
       )}
 
       <canvas ref={canvasRef} style={{ display: "none" }} />
-
-      <style jsx>{`
-        .video {
-          width: 100%;
-          transform: scaleX(-1);
-        }
-
-        .flash {
-          position: fixed;
-          inset: 0;
-          background: white;
-        }
-      `}</style>
     </div>
   );
 }
