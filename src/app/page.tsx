@@ -16,12 +16,6 @@ const FILTERS: Record<string, { name: string; value: string }> = {
   cool: { name: "쿨톤", value: "contrast(1.1) brightness(1.05) saturate(1.1)" },
 };
 
-const LAYOUT = {
-  canvasW: 620,
-  canvasH: 2100,
-  yList: [40, 480, 920, 1360],
-};
-
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -53,21 +47,17 @@ export default function Home() {
       setStreaming(true);
     }
 
-    const audio = document.createElement("audio");
-    audio.src = "/shutter.mp3";
+    const audio = new Audio("/shutter.mp3");
     audio.preload = "auto";
     soundRef.current = audio;
   };
 
   // 🔊 sound
   const playSound = () => {
-    const audio = soundRef.current;
-    if (!audio) return;
-    audio.currentTime = 0;
-    audio.play().catch(() => {});
+    soundRef.current?.play().catch(() => {});
   };
 
-  // 📸 capture (mirror + crop safe)
+  // 📸 IMPORTANT: 비율 그대로 캡처 (정사각형 제거)
   const capture = () => {
     const video = videoRef.current;
     if (!video) return null;
@@ -75,51 +65,33 @@ export default function Home() {
     const vw = video.videoWidth;
     const vh = video.videoHeight;
 
-    const cw = 600;
-    const ch = 800;
-
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    // cover crop
-    const videoRatio = vw / vh;
-    const canvasRatio = cw / ch;
-
-    let sx = 0,
-      sy = 0,
-      sw = vw,
-      sh = vh;
-
-    if (videoRatio > canvasRatio) {
-      sw = vh * canvasRatio;
-      sx = (vw - sw) / 2;
-    } else {
-      sh = vw / canvasRatio;
-      sy = (vh - sh) / 2;
-    }
-
-    canvas.width = cw;
-    canvas.height = ch;
+    canvas.width = vw;
+    canvas.height = vh;
 
     // mirror
-    ctx.translate(cw, 0);
+    ctx.translate(vw, 0);
     ctx.scale(-1, 1);
 
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
+    ctx.filter = FILTERS[filter].value;
+
+    ctx.drawImage(video, 0, 0, vw, vh);
 
     return canvas.toDataURL("image/png");
   };
 
-  // 🖼 safe image loader (IMPORTANT FIX)
+  // 🖼 image loader (safe)
   const loadImage = (src: string) =>
     new Promise<HTMLImageElement>((resolve) => {
-      const img = document.createElement("img");
-      img.onload = () => resolve(img);
+      const img = new window.Image();
       img.src = src;
+      img.onload = () => resolve(img);
     });
 
-  // 📦 cover draw helper (NO STRETCH FIX)
+  // 📦 cover draw (frame용)
   const drawCover = (
     ctx: CanvasRenderingContext2D,
     img: HTMLImageElement,
@@ -147,7 +119,7 @@ export default function Home() {
     ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
   };
 
-  // 🎨 render final image
+  // 🎨 render preview + result
   const renderImage = useCallback(async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -155,34 +127,41 @@ export default function Home() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    canvas.width = LAYOUT.canvasW;
-    canvas.height = LAYOUT.canvasH;
+    const imgs = await Promise.all(photos.map(loadImage));
+
+    // 👉 전체 canvas를 "첫 이미지 비율" 기준으로 맞춤
+    const base = imgs[0];
+    const ratio = base.width / base.height;
+
+    canvas.width = 800;
+    canvas.height = 800 / ratio;
 
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const imgs = await Promise.all(photos.map(loadImage));
+    const slotH = canvas.height / 4;
 
     imgs.forEach((img, i) => {
       ctx.filter = FILTERS[filter].value;
-      drawCover(ctx, img, 0, LAYOUT.yList[i], 620, 800);
+      drawCover(ctx, img, 0, i * slotH, canvas.width, slotH);
     });
 
     ctx.filter = "none";
 
     const frame = await loadImage(selectedFrame);
-    ctx.drawImage(frame, 0, 0, 620, 2100);
+    ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
 
     setResultImage(canvas.toDataURL("image/png"));
   }, [photos, filter, selectedFrame]);
 
+  // 🔁 preview auto render
   useEffect(() => {
-    if (step === "preview") {
+    if (step === "preview" && photos.length > 0) {
       renderImage();
     }
-  }, [step, renderImage]);
+  }, [step, photos, filter, selectedFrame]);
 
-  // 📸 shoot loop (flash fixed)
+  // 📸 shoot loop
   const startAutoShoot = async () => {
     if (isShooting) return;
 
@@ -197,18 +176,15 @@ export default function Home() {
 
       setCountdown(null);
 
-      // flash FIX (stable)
-      requestAnimationFrame(() => {
-        setFlash(true);
-        setTimeout(() => setFlash(false), 80);
-      });
+      setFlash(true);
+      setTimeout(() => setFlash(false), 80);
 
       playSound();
 
       const img = capture();
       if (img) temp.push(img);
 
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, 200));
     }
 
     setPhotos(temp);
@@ -281,9 +257,11 @@ export default function Home() {
       {/* PREVIEW */}
       {step === "preview" && (
         <div>
-          {photos.map((p, i) => (
-            <img key={i} src={p} style={{ width: 80 }} />
-          ))}
+          <div>
+            {photos.map((p, i) => (
+              <img key={i} src={p} style={{ width: 80 }} />
+            ))}
+          </div>
 
           <div>
             {frames.map((f) => (
@@ -301,9 +279,7 @@ export default function Home() {
             ))}
           </div>
 
-          <button onClick={() => setStep("result")}>
-            결과 보기
-          </button>
+          <button onClick={() => setStep("result")}>결과 보기</button>
         </div>
       )}
 
@@ -315,7 +291,7 @@ export default function Home() {
               src={resultImage}
               alt="result"
               width={300}
-              height={500}
+              height={300}
               unoptimized
             />
           )}
