@@ -7,12 +7,17 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [streaming, setStreaming] = useState(false);
-  const [photos, setPhotos] = useState<string[]>([]);
   const [step, setStep] = useState<"camera" | "result">("camera");
   const [resultImage, setResultImage] = useState<string | null>(null);
 
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isShooting, setIsShooting] = useState(false);
+  const [flash, setFlash] = useState(false);
+
+  // 🔊 소리 (public 폴더에 넣어야함)
+  const shutterSound = typeof window !== "undefined"
+    ? new Audio("/shutter.mp3")
+    : null;
 
   // 카메라 시작
   const startCamera = async () => {
@@ -27,9 +32,9 @@ export default function Home() {
     }
   };
 
-  // 📸 실제 촬영 (크롭 포함)
+  // 📸 캡쳐 (mirror 포함)
   const capture = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current) return null;
 
     const video = videoRef.current;
     const canvas = document.createElement("canvas");
@@ -58,18 +63,22 @@ export default function Home() {
       sy = (video.videoHeight - sh) / 2;
     }
 
-    ctx?.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
+    // 🔥 mirror 적용
+    ctx?.save();
+    ctx?.scale(-1, 1);
+    ctx?.drawImage(video, sx, sy, sw, sh, -width, 0, width, height);
+    ctx?.restore();
 
     return canvas.toDataURL("image/png");
   };
 
-  // 🎬 자동 촬영 시작
+  // 🎬 자동 촬영
   const startAutoShoot = async () => {
-    setPhotos([]);
     setIsShooting(true);
 
+    const tempPhotos: string[] = [];
+
     for (let i = 0; i < 4; i++) {
-      // 카운트다운
       for (let t = 5; t > 0; t--) {
         setCountdown(t);
         await new Promise((res) => setTimeout(res, 1000));
@@ -77,21 +86,29 @@ export default function Home() {
 
       setCountdown(null);
 
-      const img = capture();
-      if (img) {
-        setPhotos((prev) => [...prev, img]);
+      // 플래시
+      setFlash(true);
+      setTimeout(() => setFlash(false), 120);
+
+      // 소리
+      if (shutterSound) {
+        shutterSound.currentTime = 0;
+        shutterSound.play();
       }
 
-      // 촬영 텀
-      await new Promise((res) => setTimeout(res, 500));
+      const img = capture();
+      if (img) tempPhotos.push(img);
+
+      await new Promise((res) => setTimeout(res, 600));
     }
 
     setIsShooting(false);
-    makeStrip();
+
+    makeStrip(tempPhotos);
   };
 
   // 🧠 합성
-  const makeStrip = () => {
+  const makeStrip = (photoList: string[]) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -101,7 +118,7 @@ export default function Home() {
     canvas.width = 300;
     canvas.height = 1200;
 
-    photos.forEach((img, i) => {
+    photoList.forEach((img, i) => {
       const image = new Image();
       image.src = img;
 
@@ -119,7 +136,7 @@ export default function Home() {
 
   return (
     <div className="container">
-      <h1>📸 Soykko Booth</h1>
+      <h1 className="title">📸 Soykko Booth</h1>
 
       {step === "camera" && (
         <div className="cameraBox">
@@ -131,8 +148,8 @@ export default function Home() {
             className="video"
           />
 
-          {/* 카운트다운 표시 */}
           {countdown && <div className="count">{countdown}</div>}
+          {flash && <div className="flash" />}
 
           {!streaming ? (
             <button className="btn" onClick={startCamera}>
@@ -149,11 +166,22 @@ export default function Home() {
       )}
 
       {step === "result" && resultImage && (
-        <div>
+        <div className="resultBox">
           <img src={resultImage} className="result" />
-          <a href={resultImage} download className="btn">
+
+          <a href={resultImage} download="booth.png" className="download">
             다운로드
           </a>
+
+          <button
+            className="reset"
+            onClick={() => {
+              setResultImage(null);
+              setStep("camera");
+            }}
+          >
+            다시 찍기
+          </button>
         </div>
       )}
 
@@ -161,13 +189,21 @@ export default function Home() {
 
       <style jsx>{`
         .container {
+          min-height: 100vh;
           background: #111;
           color: white;
-          min-height: 100vh;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
+        }
+
+        .title {
+          margin-bottom: 20px;
+        }
+
+        .cameraBox {
+          position: relative;
         }
 
         .video {
@@ -175,10 +211,7 @@ export default function Home() {
           aspect-ratio: 3/4;
           object-fit: cover;
           border-radius: 16px;
-        }
-
-        .cameraBox {
-          position: relative;
+          transform: scaleX(-1); /* 🔥 거울모드 */
         }
 
         .count {
@@ -190,8 +223,15 @@ export default function Home() {
           font-weight: bold;
         }
 
-        .btn, .shoot {
-          margin-top: 20px;
+        .flash {
+          position: absolute;
+          inset: 0;
+          background: white;
+          opacity: 0.8;
+        }
+
+        .btn {
+          margin-top: 15px;
           padding: 12px 20px;
           border-radius: 999px;
           background: #ff3b3b;
@@ -199,8 +239,46 @@ export default function Home() {
           color: white;
         }
 
+        .shoot {
+          position: absolute;
+          bottom: -70px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 70px;
+          height: 70px;
+          border-radius: 50%;
+          background: white;
+          color: black;
+          font-weight: bold;
+          border: none;
+        }
+
+        .resultBox {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
+        }
+
         .result {
           width: 300px;
+          border-radius: 12px;
+        }
+
+        .download {
+          background: #22c55e;
+          padding: 10px 20px;
+          border-radius: 999px;
+          color: white;
+          text-decoration: none;
+        }
+
+        .reset {
+          background: #444;
+          padding: 10px 20px;
+          border-radius: 999px;
+          border: none;
+          color: white;
         }
       `}</style>
     </div>
