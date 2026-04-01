@@ -19,9 +19,6 @@ const FILTERS: Record<string, { name: string; value: string }> = {
 const LAYOUT = {
   canvasW: 620,
   canvasH: 2100,
-  x: 30,
-  w: 560,
-  h: 420,
   yList: [40, 480, 920, 1360],
 };
 
@@ -32,17 +29,22 @@ export default function Home() {
 
   const [streaming, setStreaming] = useState(false);
   const [step, setStep] = useState<"camera" | "preview" | "result">("camera");
+
   const [photos, setPhotos] = useState<string[]>([]);
   const [selectedFrame, setSelectedFrame] = useState(frames[0]);
-  const [resultImage, setResultImage] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [isShooting, setIsShooting] = useState(false);
-  const [flash, setFlash] = useState(false);
   const [filter, setFilter] = useState("soft");
 
+  const [resultImage, setResultImage] = useState<string | null>(null);
+
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [flash, setFlash] = useState(false);
+  const [isShooting, setIsShooting] = useState(false);
+
+  // 🎥 camera start
   const startCamera = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user" },
+      audio: false,
     });
 
     if (videoRef.current) {
@@ -54,64 +56,62 @@ export default function Home() {
     const audio = document.createElement("audio");
     audio.src = "/shutter.mp3";
     audio.preload = "auto";
-    audio.volume = 1;
-
     soundRef.current = audio;
   };
 
-  // 📷 CAPTURE (🔥 mirror ON)
-  const capture = () => {
-    if (!videoRef.current) return null;
+  // 🔊 sound
+  const playSound = () => {
+    const audio = soundRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  };
 
+  // 📸 capture (mirror + crop safe)
+  const capture = () => {
     const video = videoRef.current;
+    if (!video) return null;
+
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+
+    const cw = 600;
+    const ch = 800;
 
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-
-    const targetW = LAYOUT.w;
-    const targetH = LAYOUT.h;
-
-    const targetRatio = targetW / targetH;
+    // cover crop
     const videoRatio = vw / vh;
+    const canvasRatio = cw / ch;
 
     let sx = 0,
       sy = 0,
       sw = vw,
       sh = vh;
 
-    if (videoRatio > targetRatio) {
-      sw = vh * targetRatio;
+    if (videoRatio > canvasRatio) {
+      sw = vh * canvasRatio;
       sx = (vw - sw) / 2;
     } else {
-      sh = vw * targetRatio;
+      sh = vw / canvasRatio;
       sy = (vh - sh) / 2;
     }
 
-    canvas.width = targetW;
-    canvas.height = targetH;
+    canvas.width = cw;
+    canvas.height = ch;
 
-    // 🔥 핵심: 캡처도 mirror
-    ctx.translate(targetW, 0);
+    // mirror
+    ctx.translate(cw, 0);
     ctx.scale(-1, 1);
 
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, targetW, targetH);
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
 
     return canvas.toDataURL("image/png");
   };
 
-  const playShutter = () => {
-    const audio = soundRef.current;
-    if (!audio) return;
-
-    audio.pause();
-    audio.currentTime = 0;
-    audio.play().catch(() => {});
-  };
-
+  // 🖼 safe image loader (IMPORTANT FIX)
   const loadImage = (src: string) =>
     new Promise<HTMLImageElement>((resolve) => {
       const img = document.createElement("img");
@@ -119,73 +119,96 @@ export default function Home() {
       img.src = src;
     });
 
-  const renderImage = useCallback(
-    async (frameSrc: string) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+  // 📦 cover draw helper (NO STRETCH FIX)
+  const drawCover = (
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    x: number,
+    y: number,
+    w: number,
+    h: number
+  ) => {
+    const ir = img.width / img.height;
+    const cr = w / h;
 
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+    let sx = 0,
+      sy = 0,
+      sw = img.width,
+      sh = img.height;
 
-      canvas.width = LAYOUT.canvasW;
-      canvas.height = LAYOUT.canvasH;
+    if (ir > cr) {
+      sw = img.height * cr;
+      sx = (img.width - sw) / 2;
+    } else {
+      sh = img.width / cr;
+      sy = (img.height - sh) / 2;
+    }
 
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  };
 
-      const imgs = await Promise.all(photos.map(loadImage));
+  // 🎨 render final image
+  const renderImage = useCallback(async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-      imgs.forEach((img, i) => {
-        ctx.filter = FILTERS[filter].value;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-        ctx.drawImage(
-          img,
-          LAYOUT.x,
-          LAYOUT.yList[i],
-          LAYOUT.w,
-          LAYOUT.h
-        );
-      });
+    canvas.width = LAYOUT.canvasW;
+    canvas.height = LAYOUT.canvasH;
 
-      ctx.filter = "none";
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const frame = await loadImage(frameSrc);
-      ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+    const imgs = await Promise.all(photos.map(loadImage));
 
-      setResultImage(canvas.toDataURL("image/png"));
-    },
-    [photos, filter]
-  );
+    imgs.forEach((img, i) => {
+      ctx.filter = FILTERS[filter].value;
+      drawCover(ctx, img, 0, LAYOUT.yList[i], 620, 800);
+    });
+
+    ctx.filter = "none";
+
+    const frame = await loadImage(selectedFrame);
+    ctx.drawImage(frame, 0, 0, 620, 2100);
+
+    setResultImage(canvas.toDataURL("image/png"));
+  }, [photos, filter, selectedFrame]);
 
   useEffect(() => {
-    if (photos.length === 4) {
-      renderImage(selectedFrame);
+    if (step === "preview") {
+      renderImage();
     }
-  }, [photos, selectedFrame, renderImage]);
+  }, [step, renderImage]);
 
+  // 📸 shoot loop (flash fixed)
   const startAutoShoot = async () => {
     if (isShooting) return;
 
     setIsShooting(true);
-
     const temp: string[] = [];
 
     for (let i = 0; i < 4; i++) {
-      for (let t = 5; t > 0; t--) {
+      for (let t = 3; t > 0; t--) {
         setCountdown(t);
         await new Promise((r) => setTimeout(r, 1000));
       }
 
       setCountdown(null);
-      setFlash(true);
-      setTimeout(() => setFlash(false), 100);
 
-      playShutter();
+      // flash FIX (stable)
+      requestAnimationFrame(() => {
+        setFlash(true);
+        setTimeout(() => setFlash(false), 80);
+      });
+
+      playSound();
 
       const img = capture();
       if (img) temp.push(img);
 
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 250));
     }
 
     setPhotos(temp);
@@ -193,6 +216,7 @@ export default function Home() {
     setStep("preview");
   };
 
+  // 📤 share
   const shareImage = async () => {
     if (!resultImage) return;
 
@@ -202,24 +226,37 @@ export default function Home() {
     if (navigator.share) {
       await navigator.share({
         files: [file],
-        title: "BOOTH",
+        title: "Photo Booth",
       });
     }
   };
 
-  return (
-    <div>
-      {/* 🔥 video mirror ON */}
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        playsInline
-        style={{ transform: "scaleX(-1)", width: "100%" }}
-      />
+  // ⬇ download
+  const downloadImage = () => {
+    if (!resultImage) return;
 
+    const a = document.createElement("a");
+    a.href = resultImage;
+    a.download = "booth.png";
+    a.click();
+  };
+
+  return (
+    <div style={{ textAlign: "center" }}>
+      {/* CAMERA */}
       {step === "camera" && (
-        <div>
+        <>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{
+              width: "100%",
+              transform: "scaleX(-1)",
+            }}
+          />
+
           {!streaming ? (
             <button onClick={startCamera}>카메라 시작</button>
           ) : (
@@ -227,30 +264,63 @@ export default function Home() {
           )}
 
           {countdown !== null && <h1>{countdown}</h1>}
+
           {flash && (
             <div
               style={{
                 position: "fixed",
                 inset: 0,
                 background: "white",
+                zIndex: 9999,
               }}
             />
           )}
+        </>
+      )}
+
+      {/* PREVIEW */}
+      {step === "preview" && (
+        <div>
+          {photos.map((p, i) => (
+            <img key={i} src={p} style={{ width: 80 }} />
+          ))}
+
+          <div>
+            {frames.map((f) => (
+              <button key={f} onClick={() => setSelectedFrame(f)}>
+                frame
+              </button>
+            ))}
+          </div>
+
+          <div>
+            {Object.entries(FILTERS).map(([k, v]) => (
+              <button key={k} onClick={() => setFilter(k)}>
+                {v.name}
+              </button>
+            ))}
+          </div>
+
+          <button onClick={() => setStep("result")}>
+            결과 보기
+          </button>
         </div>
       )}
 
-      {step === "preview" && (
+      {/* RESULT */}
+      {step === "result" && (
         <div>
           {resultImage && (
             <Image
               src={resultImage}
-              alt=""
+              alt="result"
               width={300}
               height={500}
               unoptimized
             />
           )}
 
+          <button onClick={downloadImage}>다운로드</button>
           <button onClick={shareImage}>공유</button>
         </div>
       )}
