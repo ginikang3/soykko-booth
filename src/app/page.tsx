@@ -19,8 +19,8 @@ const LAYOUT = {
   canvasW: 620,
   canvasH: 2100,
   x: 30,
-  w: 560, // 4:3 비율의 너비
-  h: 420, // 4:3 비율의 높이 (560 / 420 = 1.33)
+  w: 560,
+  h: 420,
   yList: [40, 480, 920, 1360],
 };
 
@@ -47,13 +47,9 @@ export default function Home() {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: "user",
-          aspectRatio: 4 / 3 // 카메라 소스 자체에 4:3 요청
-        },
+        video: { facingMode: "user", aspectRatio: 4 / 3 },
         audio: false,
       });
-
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
@@ -64,28 +60,21 @@ export default function Home() {
     }
   };
 
-  // ✅ 4:3 비율로 정확하게 크롭하여 캡처하는 로직
   const capture = () => {
     if (!videoRef.current) return null;
     const video = videoRef.current;
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
-
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     const outW = LAYOUT.w;
     const outH = LAYOUT.h;
-    
     canvas.width = outW;
     canvas.height = outH;
-
     const videoRatio = vw / vh;
     const targetRatio = outW / outH;
-
     let sx = 0, sy = 0, sw = vw, sh = vh;
-
-    // 소스 비디오에서 4:3 영역 추출 계산 (Center Crop)
     if (videoRatio > targetRatio) {
       sw = vh * targetRatio;
       sx = (vw - sw) / 2;
@@ -93,11 +82,9 @@ export default function Home() {
       sh = vw / targetRatio;
       sy = (vh - sh) / 2;
     }
-
     ctx.translate(outW, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH);
-    
     return canvas.toDataURL("image/png");
   };
 
@@ -108,6 +95,7 @@ export default function Home() {
       img.onload = () => resolve(img);
     });
 
+  // ✅ 수정 포인트: 필터 적용 순서 및 캔버스 초기화 로직 정밀 수정
   const renderImage = useCallback(async (
     frameSrc: string,
     photoList: string[] = photos,
@@ -115,22 +103,38 @@ export default function Home() {
     isDownload = false
   ) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || photoList.length < 4) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
     const scale = isDownload ? 2 : 1;
     canvas.width = LAYOUT.canvasW * scale;
     canvas.height = LAYOUT.canvasH * scale;
+
+    // 1. 배경 초기화
+    ctx.filter = "none";
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 2. 사진 그리기 (각 사진에 필터 적용)
     const images = await Promise.all(photoList.map(loadImage));
     images.forEach((img, i) => {
-      ctx.filter = FILTERS[filterKey].value;
-      ctx.drawImage(img, LAYOUT.x * scale, LAYOUT.yList[i] * scale, LAYOUT.w * scale, LAYOUT.h * scale);
+      ctx.save(); // 설정 저장
+      ctx.filter = FILTERS[filterKey].value; // 필터 적용
+      ctx.drawImage(
+        img,
+        LAYOUT.x * scale,
+        LAYOUT.yList[i] * scale,
+        LAYOUT.w * scale,
+        LAYOUT.h * scale
+      );
+      ctx.restore(); // 필터 해제 (다음 사진이나 프레임에 영향 없도록)
     });
-    ctx.filter = "none";
+
+    // 3. 프레임 그리기 (프레임은 필터 미적용)
     const frame = await loadImage(frameSrc);
     ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+
     const final = canvas.toDataURL("image/png");
     setResultImage(final);
   }, [photos, filter]);
@@ -190,7 +194,6 @@ export default function Home() {
 
       {step === "camera" && (
         <div className="mainContent animate-up">
-          {/* ✅ CSS에서 aspect-ratio를 4/3으로 명시하여 뷰파인더 비율 고정 */}
           <div className={`cameraContainer shadow-neon ${isShooting ? "shooting" : ""}`}>
             <video ref={videoRef} autoPlay playsInline muted className="video" />
             {countdown !== null && <div className="count-overlay">{countdown}</div>}
@@ -198,7 +201,6 @@ export default function Home() {
             <div className="corner-tl" /><div className="corner-tr" />
             <div className="corner-bl" /><div className="corner-br" />
           </div>
-
           <div className="actionArea">
             {!streaming ? (
               <button className="btn-main pulse" onClick={startCamera}>카메라 연결하기</button>
@@ -289,17 +291,7 @@ export default function Home() {
         .dot { width: 6px; height: 6px; border-radius: 50%; background: #222; }
         .dot.active { background: #2563eb; box-shadow: 0 0 8px #2563eb; }
         .mainContent { display: flex; flex-direction: column; flex: 1; gap: 24px; }
-
-        /* 📸 Camera Design - 4:3 비율 고정 */
-        .cameraContainer {
-          width: 100%;
-          aspect-ratio: 4 / 3; /* 4:3 비율로 변경 */
-          overflow: hidden;
-          border-radius: 24px;
-          position: relative;
-          background: #111;
-          border: 1px solid #222;
-        }
+        .cameraContainer { width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 24px; position: relative; background: #111; border: 1px solid #222; }
         .cameraContainer.shooting { border-color: #2563eb; }
         .video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         .count-overlay { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; font-size: 120px; font-weight: 900; z-index: 10; color: #fff; text-shadow: 0 0 30px rgba(0,0,0,0.5); }
@@ -309,14 +301,11 @@ export default function Home() {
         .corner-tr { top: 20px; right: 20px; border-left: 0; border-bottom: 0; }
         .corner-bl { bottom: 20px; left: 20px; border-right: 0; border-top: 0; }
         .corner-br { bottom: 20px; right: 20px; border-left: 0; border-top: 0; }
-
         .actionArea { margin-top: auto; padding-bottom: 40px; text-align: center; }
         .btn-main { width: 100%; padding: 20px; background: #2563eb; color: #fff; border-radius: 18px; font-weight: 800; border: none; font-size: 1rem; cursor: pointer; transition: 0.2s; }
-        .btn-main:active { transform: scale(0.98); }
         .btn-sub { width: 100%; padding: 18px; background: transparent; color: #555; border: 1px solid #222; border-radius: 18px; font-weight: 700; cursor: pointer; }
         .shutter-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
         .btn-shutter { width: 80px; height: 80px; border-radius: 50%; border: 6px solid #222; background: #fff; color: #000; font-weight: 900; font-size: 0.7rem; cursor: pointer; transition: 0.2s; }
-        .btn-shutter:active { transform: scale(0.9); border-color: #2563eb; }
         .hint { font-size: 0.75rem; color: #444; font-weight: 500; }
         .editor-layout { display: flex; gap: 20px; align-items: flex-start; }
         .preview-img { width: 180px; border-radius: 4px; border: 1px solid #222; }
@@ -345,6 +334,7 @@ export default function Home() {
         @keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         .pulse { animation: pulse-shadow 2s infinite; }
         @keyframes pulse-shadow { 0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(37, 99, 235, 0); } 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); } }
+        .mt-auto { margin-top: auto; }
       `}</style>
     </div>
   );
