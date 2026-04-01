@@ -8,12 +8,8 @@ const frames = [
   "/frames/frame3.png",
 ];
 
-const FILTERS: Record<string, { name: string; value: string }> = {
-  normal: { name: "기본", value: "none" },
-  soft: { name: "뽀샤시", value: "brightness(1.15) contrast(0.95) saturate(1.2)" },
-  vivid: { name: "생기", value: "contrast(1.2) saturate(1.4) brightness(1.05)" },
-  cool: { name: "쿨톤", value: "contrast(1.1) brightness(1.05) hue-rotate(10deg) saturate(1.1)" },
-};
+// 필터 로직 제거를 위해 기본값만 유지
+const DEFAULT_FILTER = "none";
 
 const LAYOUT = {
   canvasW: 620,
@@ -36,7 +32,6 @@ export default function Home() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isShooting, setIsShooting] = useState(false);
   const [flash, setFlash] = useState(false);
-  const [filter, setFilter] = useState("soft");
 
   const shutterSoundRef = useRef<HTMLAudioElement | null>(null);
 
@@ -50,6 +45,7 @@ export default function Home() {
         video: { facingMode: "user", aspectRatio: 4 / 3 },
         audio: false,
       });
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
@@ -66,15 +62,20 @@ export default function Home() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
+
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     const outW = LAYOUT.w;
     const outH = LAYOUT.h;
+    
     canvas.width = outW;
     canvas.height = outH;
+
     const videoRatio = vw / vh;
     const targetRatio = outW / outH;
+
     let sx = 0, sy = 0, sw = vw, sh = vh;
+
     if (videoRatio > targetRatio) {
       sw = vh * targetRatio;
       sx = (vw - sw) / 2;
@@ -82,9 +83,11 @@ export default function Home() {
       sh = vw / targetRatio;
       sy = (vh - sh) / 2;
     }
+
     ctx.translate(outW, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH);
+    
     return canvas.toDataURL("image/png");
   };
 
@@ -95,11 +98,9 @@ export default function Home() {
       img.onload = () => resolve(img);
     });
 
-  // ✅ 수정 포인트: 필터 적용 순서 및 캔버스 초기화 로직 정밀 수정
   const renderImage = useCallback(async (
     frameSrc: string,
     photoList: string[] = photos,
-    filterKey: string = filter,
     isDownload = false
   ) => {
     const canvas = canvasRef.current;
@@ -111,38 +112,34 @@ export default function Home() {
     canvas.width = LAYOUT.canvasW * scale;
     canvas.height = LAYOUT.canvasH * scale;
 
-    // 1. 배경 초기화
     ctx.filter = "none";
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 2. 사진 그리기 (각 사진에 필터 적용)
     const images = await Promise.all(photoList.map(loadImage));
-    images.forEach((img, i) => {
-      ctx.save(); // 설정 저장
-      ctx.filter = FILTERS[filterKey].value; // 필터 적용
+
+    for (let i = 0; i < images.length; i++) {
       ctx.drawImage(
-        img,
+        images[i],
         LAYOUT.x * scale,
         LAYOUT.yList[i] * scale,
         LAYOUT.w * scale,
         LAYOUT.h * scale
       );
-      ctx.restore(); // 필터 해제 (다음 사진이나 프레임에 영향 없도록)
-    });
+    }
 
-    // 3. 프레임 그리기 (프레임은 필터 미적용)
     const frame = await loadImage(frameSrc);
     ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
 
     const final = canvas.toDataURL("image/png");
     setResultImage(final);
-  }, [photos, filter]);
+  }, [photos]);
 
   const startAutoShoot = async () => {
     if (isShooting) return;
     setIsShooting(true);
     const temp: string[] = [];
+
     for (let i = 0; i < 4; i++) {
       for (let t = 5; t > 0; t--) {
         setCountdown(t);
@@ -152,10 +149,12 @@ export default function Home() {
       setFlash(true);
       setTimeout(() => setFlash(false), 120);
       shutterSoundRef.current?.play().catch(() => {});
+      
       const img = capture();
       if (img) temp.push(img);
       await new Promise((r) => setTimeout(r, 400));
     }
+
     setPhotos(temp);
     setIsShooting(false);
     setStep("preview");
@@ -163,9 +162,9 @@ export default function Home() {
 
   useEffect(() => {
     if (photos.length === 4) {
-      renderImage(selectedFrame, photos, filter);
+      renderImage(selectedFrame, photos);
     }
-  }, [photos, selectedFrame, filter, renderImage]);
+  }, [photos, selectedFrame, renderImage]);
 
   const shareLink = async () => {
     await navigator.clipboard.writeText(window.location.href);
@@ -192,6 +191,7 @@ export default function Home() {
         </div>
       </header>
 
+      {/* CAMERA */}
       {step === "camera" && (
         <div className="mainContent animate-up">
           <div className={`cameraContainer shadow-neon ${isShooting ? "shooting" : ""}`}>
@@ -201,7 +201,9 @@ export default function Home() {
             <div className="corner-tl" /><div className="corner-tr" />
             <div className="corner-bl" /><div className="corner-br" />
           </div>
-          <div className="actionArea">
+          
+          {/* ✅ 버튼 위치 상향 조정 */}
+          <div className="actionArea cameraMode">
             {!streaming ? (
               <button className="btn-main pulse" onClick={startCamera}>카메라 연결하기</button>
             ) : (
@@ -216,6 +218,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* PREVIEW */}
       {step === "preview" && (
         <div className="mainContent animate-up">
           <div className="editor-layout">
@@ -224,27 +227,13 @@ export default function Home() {
             </div>
             <div className="control-side">
               <section className="ctrl-section">
-                <label>FILTER</label>
-                <div className="filter-chips">
-                  {Object.entries(FILTERS).map(([k, v]) => (
-                    <button
-                      key={k}
-                      className={`chip ${filter === k ? "active" : ""}`}
-                      onClick={() => { setFilter(k); renderImage(selectedFrame, photos, k); }}
-                    >
-                      {v.name}
-                    </button>
-                  ))}
-                </div>
-              </section>
-              <section className="ctrl-section">
-                <label>FRAME</label>
+                <label>FRAME SELECT</label>
                 <div className="frame-grid">
                   {frames.map((f) => (
                     <div 
                       key={f} 
                       className={`frame-item ${selectedFrame === f ? "active" : ""}`}
-                      onClick={() => { setSelectedFrame(f); renderImage(f, photos, filter); }}
+                      onClick={() => { setSelectedFrame(f); renderImage(f, photos); }}
                     >
                       <img src={f} className="f-thumb" />
                     </div>
@@ -254,7 +243,7 @@ export default function Home() {
             </div>
           </div>
           <button className="btn-main mt-auto" onClick={async () => {
-            await renderImage(selectedFrame, photos, filter, true);
+            await renderImage(selectedFrame, photos, true);
             setStep("result");
           }}>
             DOWNLOAD READY
@@ -262,9 +251,10 @@ export default function Home() {
         </div>
       )}
 
+      {/* RESULT */}
       {step === "result" && resultImage && (
         <div className="mainContent animate-up">
-          <img src={resultImage} className="final-img shadow-neon" />
+          <img src={resultImage} className="final-img shadow-neon" alt="Final Result" />
           <div className="share-panel">
             <p className="share-label">SHARE MOMENT</p>
             <div className="share-btns">
@@ -283,48 +273,77 @@ export default function Home() {
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
       <style jsx>{`
-        .container { max-width: 450px; margin: 0 auto; background: #000; color: #fff; min-height: 100vh; padding: 20px; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; }
-        .header { text-align: center; margin-bottom: 30px; }
+        .container {
+          max-width: 450px;
+          margin: 0 auto;
+          background: #000;
+          color: #fff;
+          min-height: 100vh;
+          padding: 20px;
+          font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .header { text-align: center; margin-bottom: 20px; }
         .logo { font-size: 1.5rem; font-weight: 900; letter-spacing: -1px; margin-bottom: 8px; }
         .logo span { color: #2563eb; }
         .status-bar { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.65rem; color: #555; font-weight: 800; }
         .dot { width: 6px; height: 6px; border-radius: 50%; background: #222; }
         .dot.active { background: #2563eb; box-shadow: 0 0 8px #2563eb; }
-        .mainContent { display: flex; flex-direction: column; flex: 1; gap: 24px; }
-        .cameraContainer { width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 24px; position: relative; background: #111; border: 1px solid #222; }
+
+        .mainContent { display: flex; flex-direction: column; flex: 1; gap: 20px; }
+
+        .cameraContainer {
+          width: 100%;
+          aspect-ratio: 4 / 3;
+          overflow: hidden;
+          border-radius: 24px;
+          position: relative;
+          background: #111;
+          border: 1px solid #222;
+        }
         .cameraContainer.shooting { border-color: #2563eb; }
         .video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         .count-overlay { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; font-size: 120px; font-weight: 900; z-index: 10; color: #fff; text-shadow: 0 0 30px rgba(0,0,0,0.5); }
         .flash-overlay { position: absolute; inset: 0; background: #fff; z-index: 20; }
+        
         [class^="corner-"] { position: absolute; width: 20px; height: 20px; border: 2px solid #333; z-index: 5; }
         .corner-tl { top: 20px; left: 20px; border-right: 0; border-bottom: 0; }
         .corner-tr { top: 20px; right: 20px; border-left: 0; border-bottom: 0; }
         .corner-bl { bottom: 20px; left: 20px; border-right: 0; border-top: 0; }
         .corner-br { bottom: 20px; right: 20px; border-left: 0; border-top: 0; }
-        .actionArea { margin-top: auto; padding-bottom: 40px; text-align: center; }
+
+        /* ✅ 버튼 위치 상향 조정: margin-top을 줄여서 위로 올림 */
+        .actionArea { text-align: center; margin-top: 10px; padding-bottom: 20px; }
+        .actionArea.cameraMode { margin-top: 20px; }
+
         .btn-main { width: 100%; padding: 20px; background: #2563eb; color: #fff; border-radius: 18px; font-weight: 800; border: none; font-size: 1rem; cursor: pointer; transition: 0.2s; }
         .btn-sub { width: 100%; padding: 18px; background: transparent; color: #555; border: 1px solid #222; border-radius: 18px; font-weight: 700; cursor: pointer; }
-        .shutter-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-        .btn-shutter { width: 80px; height: 80px; border-radius: 50%; border: 6px solid #222; background: #fff; color: #000; font-weight: 900; font-size: 0.7rem; cursor: pointer; transition: 0.2s; }
+        
+        .shutter-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+        .btn-shutter { width: 80px; height: 80px; border-radius: 50%; border: 6px solid #222; background: #fff; color: #000; font-weight: 900; font-size: 0.7rem; cursor: pointer; }
         .hint { font-size: 0.75rem; color: #444; font-weight: 500; }
+
         .editor-layout { display: flex; gap: 20px; align-items: flex-start; }
         .preview-img { width: 180px; border-radius: 4px; border: 1px solid #222; }
         .final-img { width: 240px; align-self: center; border-radius: 4px; }
-        .control-side { flex: 1; display: flex; flex-direction: column; gap: 24px; }
+        
+        .control-side { flex: 1; display: flex; flex-direction: column; gap: 20px; }
         .ctrl-section label { display: block; font-size: 0.65rem; font-weight: 800; color: #2563eb; margin-bottom: 12px; letter-spacing: 1px; }
-        .filter-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-        .chip { background: #111; border: 1px solid #222; color: #666; padding: 8px 12px; border-radius: 10px; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
-        .chip.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+
         .frame-grid { display: flex; flex-direction: column; gap: 10px; }
-        .frame-item { width: 50px; height: 75px; border-radius: 6px; overflow: hidden; border: 2px solid transparent; opacity: 0.3; cursor: pointer; transition: 0.2s; }
+        .frame-item { width: 60px; height: 90px; border-radius: 6px; overflow: hidden; border: 2px solid transparent; opacity: 0.3; cursor: pointer; }
         .frame-item.active { opacity: 1; border-color: #2563eb; transform: scale(1.05); }
         .f-thumb { width: 100%; height: 100%; object-fit: cover; }
+
         .share-panel { background: #111; border-radius: 20px; padding: 20px; text-align: center; }
         .share-label { font-size: 0.65rem; font-weight: 800; color: #444; margin-bottom: 15px; }
         .share-btns { display: flex; gap: 10px; }
         .s-btn { flex: 1; padding: 12px; background: #222; border: none; border-radius: 12px; color: #fff; font-weight: 700; font-size: 0.75rem; cursor: pointer; }
         .s-btn.wa { background: #25D366; }
         .s-btn.fb { background: #1877F2; }
+
         .footer-actions { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: auto; }
         .deco-none { text-decoration: none; }
         .shadow-neon { box-shadow: 0 0 20px rgba(37, 99, 235, 0.1); }
