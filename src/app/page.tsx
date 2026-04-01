@@ -30,7 +30,7 @@ export default function Home() {
     }
   };
 
-  // 📸 캡쳐 (4:3 + mirror)
+  // 📸 캡쳐 (3:4 유지 + mirror)
   const capture = () => {
     if (!videoRef.current) return null;
 
@@ -38,8 +38,8 @@ export default function Home() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
 
-    const width = 400;
-    const height = 300;
+    const width = 360;
+    const height = 270;
 
     canvas.width = width;
     canvas.height = height;
@@ -101,7 +101,7 @@ export default function Home() {
     makeStrip(tempPhotos);
   };
 
-  // 🧠 합성 (가이드 포함)
+  // 🧠 합성 (표준 인생네컷)
   const makeStrip = (photoList: string[]) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -109,38 +109,38 @@ export default function Home() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    canvas.width = 460;
-    canvas.height = 1390;
+    canvas.width = 400;
+    canvas.height = 1200;
 
     // 배경
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, 460, 1390);
+    ctx.fillRect(0, 0, 400, 1200);
 
     photoList.forEach((img, i) => {
       const image = new Image();
       image.src = img;
 
       image.onload = () => {
-        const x = 30;
-        const y = 40 + i * 310;
+        const x = 20;
+        const y = 40 + i * 290; // 270 + 20
 
-        // 📸 사진
-        ctx.drawImage(image, x, y, 400, 300);
+        // 사진
+        ctx.drawImage(image, x, y, 360, 270);
 
-        // 🧪 가이드 박스
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, 400, 300);
+        // 가이드 (테스트용)
+        ctx.strokeStyle = "#ddd";
+        ctx.strokeRect(x, y, 360, 270);
 
         if (i === 3) {
-          // 하단 영역
+          // 하단 로고 영역
           ctx.fillStyle = "#f5f5f5";
-          ctx.fillRect(0, 1270, 460, 120);
+          ctx.fillRect(0, 1100, 400, 100);
 
           ctx.fillStyle = "#333";
-          ctx.font = "22px Arial";
+          ctx.font = "18px Arial";
           ctx.textAlign = "center";
-          ctx.fillText("SOYKKO", 230, 1335);
+          ctx.fillText("SOYKKO", 200, 1140);
+          ctx.fillText("2026", 200, 1170);
 
           const final = canvas.toDataURL("image/png");
           setResultImage(final);
@@ -259,7 +259,25 @@ export default function Home() {
         }
 
         .result {
-          width: 300px;
+          width: 90vw;
+          max-width: 400px;
+          border-radius: 12px;
+        }
+
+        .download {
+          background: #22c55e;
+          padding: 10px 20px;
+          border-radius: 999px;
+          color: white;
+          text-decoration: none;
+        }
+
+        .reset {
+          background: #444;
+          padding: 10px 20px;
+          border-radius: 999px;
+          border: none;
+          color: white;
         }
       `}</style>
     </div>
