@@ -1,13 +1,22 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
+
+const frames = [
+  "/frames/frame1.png",
+  "/frames/frame2.png",
+  "/frames/frame3.png",
+];
 
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [streaming, setStreaming] = useState(false);
-  const [step, setStep] = useState<"camera" | "result">("camera");
+  const [step, setStep] = useState<"camera" | "preview" | "result">("camera");
+
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [selectedFrame, setSelectedFrame] = useState(frames[0]);
   const [resultImage, setResultImage] = useState<string | null>(null);
 
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -30,7 +39,7 @@ export default function Home() {
     }
   };
 
-  // 📸 캡쳐 (3:4 유지 + mirror)
+  // 📸 캡쳐
   const capture = () => {
     if (!videoRef.current) return null;
 
@@ -44,207 +53,250 @@ export default function Home() {
     canvas.width = width;
     canvas.height = height;
 
-    const videoRatio = video.videoWidth / video.videoHeight;
-    const canvasRatio = width / height;
-
-    let sx, sy, sw, sh;
-
-    if (videoRatio > canvasRatio) {
-      sh = video.videoHeight;
-      sw = sh * canvasRatio;
-      sx = (video.videoWidth - sw) / 2;
-      sy = 0;
-    } else {
-      sw = video.videoWidth;
-      sh = sw / canvasRatio;
-      sx = 0;
-      sy = (video.videoHeight - sh) / 2;
-    }
-
     ctx?.save();
     ctx?.scale(-1, 1);
-    ctx?.drawImage(video, sx, sy, sw, sh, -width, 0, width, height);
+    ctx?.drawImage(video, 0, 0, width, height, -width, 0, width, height);
     ctx?.restore();
 
     return canvas.toDataURL("image/png");
   };
 
-  // 🎬 자동 촬영
+  // 🎬 촬영
   const startAutoShoot = async () => {
     setIsShooting(true);
-
-    const tempPhotos: string[] = [];
+    const temp: string[] = [];
 
     for (let i = 0; i < 4; i++) {
       for (let t = 5; t > 0; t--) {
         setCountdown(t);
-        await new Promise((res) => setTimeout(res, 1000));
+        await new Promise((r) => setTimeout(r, 1000));
       }
 
       setCountdown(null);
 
       setFlash(true);
-      setTimeout(() => setFlash(false), 120);
+      setTimeout(() => setFlash(false), 100);
 
-      if (shutterSound) {
-        shutterSound.currentTime = 0;
-        shutterSound.play();
-      }
+      shutterSound?.play();
 
       const img = capture();
-      if (img) tempPhotos.push(img);
+      if (img) temp.push(img);
 
-      await new Promise((res) => setTimeout(res, 600));
+      await new Promise((r) => setTimeout(r, 500));
     }
 
+    setPhotos(temp);
     setIsShooting(false);
-    makeStrip(tempPhotos);
+    setStep("preview");
+
+    // 기본 프레임으로 자동 미리보기 생성
+    setTimeout(() => renderImage(frames[0]), 100);
   };
 
-  // 🧠 합성 (표준 인생네컷)
-  const makeStrip = (photoList: string[]) => {
+  // 🧠 이미지 합성
+  const renderImage = (frameSrc: string, isDownload = false) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    canvas.width = 400;
-    canvas.height = 1200;
+    const scale = isDownload ? 2 : 1;
 
-    // 배경
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, 400, 1200);
+    canvas.width = 400 * scale;
+    canvas.height = 1200 * scale;
 
-    photoList.forEach((img, i) => {
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    let loaded = 0;
+
+    photos.forEach((img, i) => {
       const image = new Image();
       image.src = img;
 
       image.onload = () => {
-        const x = 20;
-        const y = 40 + i * 290; // 270 + 20
+        ctx.drawImage(
+          image,
+          20 * scale,
+          (40 + i * 290) * scale,
+          360 * scale,
+          270 * scale
+        );
 
-        // 사진
-        ctx.drawImage(image, x, y, 360, 270);
+        loaded++;
 
-        // 가이드 (테스트용)
-        ctx.strokeStyle = "#ddd";
-        ctx.strokeRect(x, y, 360, 270);
+        if (loaded === 4) {
+          const frame = new Image();
+          frame.src = frameSrc;
 
-        if (i === 3) {
-          // 하단 로고 영역
-          ctx.fillStyle = "#f5f5f5";
-          ctx.fillRect(0, 1100, 400, 100);
+          frame.onload = () => {
+            ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
 
-          ctx.fillStyle = "#333";
-          ctx.font = "18px Arial";
-          ctx.textAlign = "center";
-          ctx.fillText("SOYKKO", 200, 1140);
-          ctx.fillText("2026", 200, 1170);
-
-          const final = canvas.toDataURL("image/png");
-          setResultImage(final);
-          setStep("result");
+            const final = canvas.toDataURL("image/png");
+            setResultImage(final);
+          };
         }
       };
     });
   };
 
+  // 🔗 공유 기능
+  const copyLink = async () => {
+    if (!resultImage) return;
+    await navigator.clipboard.writeText(resultImage);
+    alert("링크 복사 완료!");
+  };
+
+  const shareWhatsApp = () => {
+    if (!resultImage) return;
+    window.open(`https://wa.me/?text=${encodeURIComponent(resultImage)}`);
+  };
+
+  const shareFacebook = () => {
+    if (!resultImage) return;
+    window.open(
+      `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+        resultImage
+      )}`
+    );
+  };
+
   return (
     <div className="container">
-      <h1 className="title">📸 Soykko Booth</h1>
+      <div className="card">
+        <h1 className="title">📸 Soykko Booth</h1>
 
-      {step === "camera" && (
-        <div className="cameraBox">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="video"
-          />
+        {step === "camera" && (
+          <>
+            <video ref={videoRef} autoPlay muted className="video" />
 
-          {countdown && <div className="count">{countdown}</div>}
-          {flash && <div className="flash" />}
+            {countdown && <div className="count">{countdown}</div>}
+            {flash && <div className="flash" />}
 
-          {!streaming ? (
-            <button className="btn" onClick={startCamera}>
-              카메라 시작
+            {!streaming ? (
+              <button className="btn" onClick={startCamera}>
+                카메라 시작
+              </button>
+            ) : (
+              <button className="shoot" onClick={startAutoShoot}>
+                시작
+              </button>
+            )}
+          </>
+        )}
+
+        {step === "preview" && (
+          <>
+            <h2>프레임 선택</h2>
+
+            <div className="frames">
+              {frames.map((f) => (
+                <img
+                  key={f}
+                  src={f}
+                  className={`thumb ${
+                    selectedFrame === f ? "active" : ""
+                  }`}
+                  onClick={() => {
+                    setSelectedFrame(f);
+                    renderImage(f);
+                  }}
+                />
+              ))}
+            </div>
+
+            {resultImage && (
+              <img src={resultImage} className="preview" />
+            )}
+
+            <button
+              className="btn"
+              onClick={() => {
+                renderImage(selectedFrame, true);
+                setStep("result");
+              }}
+            >
+              다음 →
             </button>
-          ) : !isShooting ? (
-            <button className="shoot" onClick={startAutoShoot}>
-              시작!
-            </button>
-          ) : (
-            <p>촬영 중...</p>
-          )}
-        </div>
-      )}
+          </>
+        )}
 
-      {step === "result" && resultImage && (
-        <div className="resultBox">
-          <img src={resultImage} className="result" />
+        {step === "result" && resultImage && (
+          <>
+            <img src={resultImage} className="preview" />
 
-          <a href={resultImage} download="booth.png" className="download">
-            다운로드
-          </a>
+            <div className="shareBox">
+              <button onClick={copyLink}>링크 복사</button>
+              <button onClick={shareWhatsApp}>WhatsApp</button>
+              <button onClick={shareFacebook}>Facebook</button>
+            </div>
 
-          <button
-            className="reset"
-            onClick={() => {
-              setResultImage(null);
-              setStep("camera");
-            }}
-          >
-            다시 찍기
-          </button>
-        </div>
-      )}
+            <a href={resultImage} download="booth.png" className="download">
+              📥 사진 저장
+            </a>
+          </>
+        )}
+      </div>
 
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
       <style jsx>{`
         .container {
+          background: linear-gradient(135deg, #ffdee9, #b5fffc);
           min-height: 100vh;
-          background: #111;
-          color: white;
           display: flex;
-          flex-direction: column;
-          align-items: center;
           justify-content: center;
+          align-items: center;
+        }
+
+        .card {
+          background: white;
+          padding: 20px;
+          border-radius: 20px;
+          text-align: center;
+          animation: up 0.6s ease;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        @keyframes up {
+          from {
+            transform: translateY(50px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
         }
 
         .video {
           width: 300px;
-          aspect-ratio: 4/3;
-          object-fit: cover;
           border-radius: 16px;
           transform: scaleX(-1);
         }
 
         .count {
           position: absolute;
-          top: 40%;
-          left: 50%;
-          transform: translate(-50%, -50%);
           font-size: 80px;
-          font-weight: bold;
+          color: white;
         }
 
         .flash {
-          position: absolute;
+          position: fixed;
           inset: 0;
           background: white;
-          opacity: 0.8;
+          opacity: 0.7;
         }
 
         .btn {
           margin-top: 15px;
           padding: 12px 20px;
           border-radius: 999px;
-          background: #ff3b3b;
+          background: #ff6b6b;
           border: none;
           color: white;
+          font-weight: bold;
         }
 
         .shoot {
@@ -252,32 +304,57 @@ export default function Home() {
           width: 70px;
           height: 70px;
           border-radius: 50%;
-          background: white;
-          color: black;
-          font-weight: bold;
+          background: #ff6b6b;
+          color: white;
           border: none;
         }
 
-        .result {
-          width: 90vw;
-          max-width: 400px;
+        .frames {
+          display: flex;
+          gap: 10px;
+          justify-content: center;
+          margin: 10px 0;
+        }
+
+        .thumb {
+          width: 70px;
+          border-radius: 10px;
+          cursor: pointer;
+          border: 2px solid transparent;
+        }
+
+        .thumb.active {
+          border: 2px solid #ff6b6b;
+        }
+
+        .preview {
+          width: 250px;
+          margin-top: 10px;
           border-radius: 12px;
         }
 
-        .download {
-          background: #22c55e;
-          padding: 10px 20px;
-          border-radius: 999px;
-          color: white;
-          text-decoration: none;
+        .shareBox {
+          display: flex;
+          gap: 10px;
+          justify-content: center;
+          margin-top: 10px;
         }
 
-        .reset {
-          background: #444;
-          padding: 10px 20px;
-          border-radius: 999px;
+        .shareBox button {
           border: none;
+          padding: 8px 12px;
+          border-radius: 10px;
+          background: #eee;
+        }
+
+        .download {
+          display: block;
+          margin-top: 15px;
+          padding: 12px;
+          background: #22c55e;
           color: white;
+          border-radius: 999px;
+          text-decoration: none;
         }
       `}</style>
     </div>
