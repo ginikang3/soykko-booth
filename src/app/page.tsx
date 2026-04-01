@@ -1,5 +1,3 @@
-/* eslint-disable react/no-unescaped-entities */
-
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
@@ -15,7 +13,7 @@ const FILTERS: Record<string, { name: string; value: string }> = {
   normal: { name: "기본", value: "none" },
   soft: { name: "뽀샤시", value: "brightness(1.15) contrast(0.95) saturate(1.2)" },
   vivid: { name: "생기", value: "contrast(1.2) saturate(1.4) brightness(1.05)" },
-  cool: { name: "쿨톤", value: "contrast(1.1) brightness(1.05) hue-rotate(10deg) saturate(1.1)" },
+  cool: { name: "쿨톤", value: "contrast(1.1) brightness(1.05) saturate(1.1)" },
 };
 
 const LAYOUT = {
@@ -30,6 +28,7 @@ const LAYOUT = {
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const soundRef = useRef<HTMLAudioElement | null>(null);
 
   const [streaming, setStreaming] = useState(false);
   const [step, setStep] = useState<"camera" | "preview" | "result">("camera");
@@ -41,27 +40,23 @@ export default function Home() {
   const [flash, setFlash] = useState(false);
   const [filter, setFilter] = useState("soft");
 
-  const shutterSound =
-    typeof window !== "undefined" ? new Audio("/shutter.mp3") : null;
+  useEffect(() => {
+    soundRef.current = new Audio("/shutter.mp3");
+    soundRef.current.preload = "auto";
+  }, []);
 
-  // 📷 카메라 시작
   const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-      });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
+    });
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setStreaming(true);
-      }
-    } catch {
-      alert("카메라를 켤 수 없습니다.");
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      setStreaming(true);
     }
   };
 
-  // 🔥 FIXED CAPTURE (모바일 비율 + mirror + crop)
   const capture = () => {
     if (!videoRef.current) return null;
 
@@ -85,7 +80,6 @@ export default function Home() {
       sw = vw,
       sh = vh;
 
-    // cover crop (핵심)
     if (videoRatio > targetRatio) {
       sw = vh * targetRatio;
       sx = (vw - sw) / 2;
@@ -97,7 +91,6 @@ export default function Home() {
     canvas.width = targetW;
     canvas.height = targetH;
 
-    // mirror 보정
     ctx.translate(targetW, 0);
     ctx.scale(-1, 1);
 
@@ -106,7 +99,6 @@ export default function Home() {
     return canvas.toDataURL("image/png");
   };
 
-  // 🔥 FIXED IMAGE LOADER (SSR safe)
   const loadImage = (src: string) =>
     new Promise<HTMLImageElement>((resolve) => {
       const img = document.createElement("img");
@@ -114,16 +106,15 @@ export default function Home() {
       img.src = src;
     });
 
-  // 🖼 최종 합성
   const renderImage = useCallback(
-    async (frameSrc: string, isDownload = false) => {
+    async (frameSrc: string, download = false) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const scale = isDownload ? 2 : 1;
+      const scale = download ? 2 : 1;
 
       canvas.width = LAYOUT.canvasW * scale;
       canvas.height = LAYOUT.canvasH * scale;
@@ -131,9 +122,9 @@ export default function Home() {
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const images = await Promise.all(photos.map(loadImage));
+      const imgs = await Promise.all(photos.map(loadImage));
 
-      images.forEach((img, i) => {
+      imgs.forEach((img, i) => {
         ctx.filter = FILTERS[filter].value;
 
         ctx.drawImage(
@@ -161,7 +152,6 @@ export default function Home() {
     }
   }, [photos, selectedFrame, renderImage]);
 
-  // 📸 자동 촬영
   const startAutoShoot = async () => {
     if (isShooting) return;
 
@@ -179,7 +169,11 @@ export default function Home() {
       setFlash(true);
       setTimeout(() => setFlash(false), 100);
 
-      shutterSound?.play();
+      soundRef.current?.pause();
+      if (soundRef.current) {
+        soundRef.current.currentTime = 0;
+        soundRef.current.play().catch(() => {});
+      }
 
       const img = capture();
       if (img) temp.push(img);
@@ -192,80 +186,76 @@ export default function Home() {
     setStep("preview");
   };
 
+  const shareImage = async () => {
+    if (!resultImage) return;
+
+    const blob = await (await fetch(resultImage)).blob();
+    const file = new File([blob], "booth.png", { type: "image/png" });
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: "BOOTH",
+          text: "ㅋㅋ",
+        });
+      } catch {}
+    } else {
+      alert("공유 지원 안됨");
+    }
+  };
+
   return (
     <div className="container">
-      <header className="header">
-        <h1 className="logo">
-          SOYKKO <span>BOOTH</span>
-        </h1>
-      </header>
+      <video ref={videoRef} autoPlay muted playsInline className="video" />
 
-      {/* CAMERA */}
       {step === "camera" && (
-        <div className="mainContent">
-          <div className="cameraContainer">
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              className="video"
-            />
-
-            {countdown !== null && (
-              <div className="count">{countdown}</div>
-            )}
-
-            {flash && <div className="flash" />}
-          </div>
-
+        <div>
           {!streaming ? (
-            <button className="btn-main" onClick={startCamera}>
-              카메라 시작
-            </button>
+            <button onClick={startCamera}>카메라 시작</button>
           ) : (
-            <button className="btn-main" onClick={startAutoShoot}>
-              촬영 시작
-            </button>
+            <button onClick={startAutoShoot}>촬영 시작</button>
           )}
+
+          {countdown !== null && <h1>{countdown}</h1>}
+          {flash && <div className="flash" />}
         </div>
       )}
 
-      {/* PREVIEW */}
       {step === "preview" && (
-        <div className="mainContent">
+        <div>
           {resultImage && (
             <Image
               src={resultImage}
-              alt="result"
+              alt=""
               width={300}
               height={500}
               unoptimized
             />
           )}
 
-          <div className="controls">
-            {Object.entries(FILTERS).map(([key, f]) => (
+          <div>
+            {Object.entries(FILTERS).map(([k, v]) => (
               <button
-                key={key}
+                key={k}
                 onClick={async () => {
-                  setFilter(key);
+                  setFilter(k);
                   await renderImage(selectedFrame);
                 }}
               >
-                {f.name}
+                {v.name}
               </button>
             ))}
           </div>
 
-          <div className="frames">
+          <div>
             {frames.map((f) => (
               <Image
                 key={f}
                 src={f}
-                alt="frame"
-                width={60}
-                height={80}
+                alt=""
+                width={50}
+                height={70}
                 onClick={async () => {
                   setSelectedFrame(f);
                   await renderImage(f);
@@ -274,34 +264,35 @@ export default function Home() {
             ))}
           </div>
 
+          <button onClick={shareImage}>공유</button>
+
           <button
             onClick={async () => {
               await renderImage(selectedFrame, true);
               setStep("result");
             }}
           >
-            다운로드
+            저장
           </button>
         </div>
       )}
 
-      {/* RESULT */}
       {step === "result" && resultImage && (
-        <div className="mainContent">
+        <div>
           <Image
             src={resultImage}
-            alt="final"
+            alt=""
             width={300}
             height={500}
             unoptimized
           />
 
           <a href={resultImage} download>
-            저장
+            다운로드
           </a>
 
           <button onClick={() => window.location.reload()}>
-            다시 촬영
+            다시
           </button>
         </div>
       )}
@@ -309,48 +300,13 @@ export default function Home() {
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
       <style jsx>{`
-        .container {
-          max-width: 480px;
-          margin: 0 auto;
-          background: #000;
-          color: #fff;
-          min-height: 100vh;
-          padding: 20px;
-        }
-
-        .cameraContainer {
-          width: 100%;
-          aspect-ratio: 4/3;
-          overflow: hidden;
-          border-radius: 20px;
-        }
-
         .video {
           width: 100%;
-          height: 100%;
-          object-fit: cover;
           transform: scaleX(-1);
         }
 
-        .btn-main {
-          margin-top: 20px;
-          width: 100%;
-          padding: 16px;
-          background: #3b82f6;
-          color: white;
-          border: none;
-          border-radius: 12px;
-        }
-
-        .count {
-          position: absolute;
-          font-size: 80px;
-          width: 100%;
-          text-align: center;
-        }
-
         .flash {
-          position: absolute;
+          position: fixed;
           inset: 0;
           background: white;
         }
