@@ -120,6 +120,27 @@ export default function Home() {
       img.onerror = () => reject(new Error(`Failed to load image at ${src}`));
     });
 
+  const applyFilterToImage = async (src: string, filter: string) => {
+  const img = await loadImage(src);
+
+  const c = document.createElement("canvas");
+  const ctx = c.getContext("2d");
+  if (!ctx) return img;
+
+  c.width = img.width;
+  c.height = img.height;
+
+  ctx.filter = filter;
+  ctx.drawImage(img, 0, 0);
+
+  const result = new Image();
+  result.src = c.toDataURL();
+
+  return new Promise<HTMLImageElement>((resolve) => {
+    result.onload = () => resolve(result);
+  });
+};
+
   const renderImage = useCallback(async (
     frameSrc: string,
     photoList: string[] = photos,
@@ -140,17 +161,19 @@ export default function Home() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     try {
-      const images = await Promise.all(photoList.map(loadImage));
-      
+      const images = await Promise.all(
+  photoList.map((src) => applyFilterToImage(src, filterVal))
+);
       // ✅ 모바일 브라우저 필터 강제 적용 로직
-      ctx.save();
-      if (ctx.filter !== undefined) {
-        ctx.filter = filterVal;
-      }
       for (let i = 0; i < images.length; i++) {
-        ctx.drawImage(images[i], LAYOUT.x * scale, LAYOUT.yList[i] * scale, LAYOUT.w * scale, LAYOUT.h * scale);
-      }
-      ctx.restore(); 
+  ctx.drawImage(
+    images[i],
+    LAYOUT.x * scale,
+    LAYOUT.yList[i] * scale,
+    LAYOUT.w * scale,
+    LAYOUT.h * scale
+  );
+}
       
       const frame = await loadImage(frameSrc);
       ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
