@@ -283,7 +283,10 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
                       <button 
                         key={f.name} 
                         className={`filter-btn ${selectedFilter === f.value ? "active" : ""}`}
-                        onClick={() => setSelectedFilter(f.value)}
+                        onClick={async () => {
+  setSelectedFilter(f.value);
+  await renderImage(selectedFrame, photos, false, f.value);
+}}
                       >
                         {f.name}
                       </button>
