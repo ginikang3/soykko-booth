@@ -2,13 +2,28 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 
-const frames = [
-  "/frames/frame1.png",
-  "/frames/frame2.png",
-  "/frames/frame3.png",
-];
+// ✅ 반복문을 사용하여 프레임 배열 자동 생성 (파일 개수만 수정하세요)
+const createFrameList = (path: string, prefix: string, count: number) => 
+  Array.from({ length: count }, (_, i) => `${path}/${prefix}_${String(i + 1).padStart(2, '0')}.png`);
 
-// 필터 로직 제거를 위해 기본값만 유지
+const FRAME_CATEGORIES = {
+  BASIC: {
+    name: "기본",
+    // 예: frame_01.png ~ frame_10.png (현재 5개로 설정)
+    items: createFrameList("/frames/basic", "basic", 8)
+  },
+  GRADIENTS: {
+    name: "그라데이션",
+    // 예: grad_01.png ~ grad_05.png (현재 5개로 설정)
+    items: createFrameList("/frames/gradients", "grad", 7)
+  },
+  SPECIAL: {
+    name: "스페셜",
+    // 예: frame_01.png ~ frame_10.png (현재 5개로 설정)
+    items: createFrameList("/frames/special", "special", 2)
+  },
+};
+
 const DEFAULT_FILTER = "none";
 
 const LAYOUT = {
@@ -27,7 +42,11 @@ export default function Home() {
   const [streaming, setStreaming] = useState(false);
   const [step, setStep] = useState<"camera" | "preview" | "result">("camera");
   const [photos, setPhotos] = useState<string[]>([]);
-  const [selectedFrame, setSelectedFrame] = useState(frames[0]);
+  
+  // ✅ 카테고리 및 프레임 상태 관리
+  const [currentCat, setCurrentCat] = useState<keyof typeof FRAME_CATEGORIES>("BASIC");
+  const [selectedFrame, setSelectedFrame] = useState(FRAME_CATEGORIES.BASIC.items[0]);
+  
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isShooting, setIsShooting] = useState(false);
@@ -92,10 +111,11 @@ export default function Home() {
   };
 
   const loadImage = (src: string) =>
-    new Promise<HTMLImageElement>((resolve) => {
+    new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new window.Image();
       img.src = src;
       img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`Failed to load image at ${src}`));
     });
 
   const renderImage = useCallback(async (
@@ -116,23 +136,27 @@ export default function Home() {
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const images = await Promise.all(photoList.map(loadImage));
+    try {
+      const images = await Promise.all(photoList.map(loadImage));
 
-    for (let i = 0; i < images.length; i++) {
-      ctx.drawImage(
-        images[i],
-        LAYOUT.x * scale,
-        LAYOUT.yList[i] * scale,
-        LAYOUT.w * scale,
-        LAYOUT.h * scale
-      );
+      for (let i = 0; i < images.length; i++) {
+        ctx.drawImage(
+          images[i],
+          LAYOUT.x * scale,
+          LAYOUT.yList[i] * scale,
+          LAYOUT.w * scale,
+          LAYOUT.h * scale
+        );
+      }
+
+      const frame = await loadImage(frameSrc);
+      ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+
+      const final = canvas.toDataURL("image/png");
+      setResultImage(final);
+    } catch (e) {
+      console.error(e);
     }
-
-    const frame = await loadImage(frameSrc);
-    ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-
-    const final = canvas.toDataURL("image/png");
-    setResultImage(final);
   }, [photos]);
 
   const startAutoShoot = async () => {
@@ -202,7 +226,6 @@ export default function Home() {
             <div className="corner-bl" /><div className="corner-br" />
           </div>
           
-          {/* ✅ 버튼 위치 상향 조정 */}
           <div className="actionArea cameraMode">
             {!streaming ? (
               <button className="btn-main pulse" onClick={startCamera}>카메라 연결하기</button>
@@ -226,16 +249,39 @@ export default function Home() {
               {resultImage && <img src={resultImage} className="preview-img shadow-lg" alt="" />}
             </div>
             <div className="control-side">
+              {/* ✅ 카테고리 탭 추가 */}
+              <section className="ctrl-section">
+                <label>CATEGORY</label>
+                <div className="cat-tabs">
+                  {(Object.keys(FRAME_CATEGORIES) as Array<keyof typeof FRAME_CATEGORIES>).map((key) => (
+                    <button 
+                      key={key} 
+                      className={`cat-btn ${currentCat === key ? "active" : ""}`}
+                      onClick={() => {
+                        setCurrentCat(key);
+                        // 카테고리 변경 시 첫 번째 프레임 자동 선택
+                        const firstFrame = FRAME_CATEGORIES[key].items[0];
+                        setSelectedFrame(firstFrame);
+                        renderImage(firstFrame, photos);
+                      }}
+                    >
+                      {FRAME_CATEGORIES[key].name}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              {/* ✅ 선택된 카테고리의 프레임들 */}
               <section className="ctrl-section">
                 <label>FRAME SELECT</label>
                 <div className="frame-grid">
-                  {frames.map((f) => (
+                  {FRAME_CATEGORIES[currentCat].items.map((f) => (
                     <div 
                       key={f} 
                       className={`frame-item ${selectedFrame === f ? "active" : ""}`}
                       onClick={() => { setSelectedFrame(f); renderImage(f, photos); }}
                     >
-                      <img src={f} className="f-thumb" />
+                      <img src={f} className="f-thumb" alt="" />
                     </div>
                   ))}
                 </div>
@@ -314,7 +360,6 @@ export default function Home() {
         .corner-bl { bottom: 20px; left: 20px; border-right: 0; border-top: 0; }
         .corner-br { bottom: 20px; right: 20px; border-left: 0; border-top: 0; }
 
-        /* ✅ 버튼 위치 상향 조정: margin-top을 줄여서 위로 올림 */
         .actionArea { text-align: center; margin-top: 10px; padding-bottom: 20px; }
         .actionArea.cameraMode { margin-top: 20px; }
 
@@ -326,14 +371,19 @@ export default function Home() {
         .hint { font-size: 0.75rem; color: #444; font-weight: 500; }
 
         .editor-layout { display: flex; gap: 20px; align-items: flex-start; }
-        .preview-img { width: 180px; border-radius: 4px; border: 1px solid #222; }
+        .photo-side { flex-shrink: 0; }
+        .preview-img { width: 160px; border-radius: 4px; border: 1px solid #222; }
         .final-img { width: 240px; align-self: center; border-radius: 4px; }
         
-        .control-side { flex: 1; display: flex; flex-direction: column; gap: 20px; }
-        .ctrl-section label { display: block; font-size: 0.65rem; font-weight: 800; color: #2563eb; margin-bottom: 12px; letter-spacing: 1px; }
+        .control-side { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        .ctrl-section label { display: block; font-size: 0.65rem; font-weight: 800; color: #2563eb; margin-bottom: 8px; letter-spacing: 1px; }
 
-        .frame-grid { display: flex; flex-direction: column; gap: 10px; }
-        .frame-item { width: 60px; height: 90px; border-radius: 6px; overflow: hidden; border: 2px solid transparent; opacity: 0.3; cursor: pointer; }
+        .cat-tabs { display: flex; gap: 5px; flex-wrap: wrap; }
+        .cat-btn { background: #111; border: 1px solid #222; color: #555; padding: 6px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 700; cursor: pointer; }
+        .cat-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+        .frame-grid { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
+        .frame-item { width: 60px; height: 90px; border-radius: 6px; overflow: hidden; border: 2px solid transparent; opacity: 0.3; cursor: pointer; flex-shrink: 0; }
         .frame-item.active { opacity: 1; border-color: #2563eb; transform: scale(1.05); }
         .f-thumb { width: 100%; height: 100%; object-fit: cover; }
 
