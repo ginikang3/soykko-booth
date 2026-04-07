@@ -323,9 +323,18 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
 
                 {/* ✅ 다운로드 버튼을 컨트롤 사이드 하단으로 이동 (접근성 향상) */}
                 <button className="btn-main shadow-blue mt-10" style={{ padding: '15px', fontSize: '0.9rem' }} onClick={async () => {
-                  await renderImage(selectedFrame, photos, true, selectedFilter);
-                  setStep("result");
-                }}>
+  await renderImage(selectedFrame, photos, true, selectedFilter);
+
+  await new Promise<void>((resolve) =>
+    requestAnimationFrame(() => resolve())
+  );
+
+  await new Promise<void>((resolve) =>
+    requestAnimationFrame(() => resolve())
+  );
+
+  setStep("result");
+}}>
                   DOWNLOAD READY
                 </button>
               </div>
