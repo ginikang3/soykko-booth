@@ -24,10 +24,10 @@ const FRAME_CATEGORIES = {
 // ✅ 필터 프리셋 정의
 const FILTERS = [
   { name: "Original", value: "none" },
-  { name: "Bright", value: "brightness(1.1) contrast(1.1) saturate(1.1)" },
-  { name: "Warm", value: "sepia(20%) saturate(140%) hue-rotate(-10deg)" },
-  { name: "Cool", value: "brightness(1.05) contrast(1.05) saturate(1.05) hue-rotate(8deg)" },
-  { name: "B&W", value: "grayscale(100%)" },
+  { name: "Bright", value: "brightness(1.1) contrast(1.1) saturate(1.1)" }, 
+  { name: "Warm", value: "sepia(20%) saturate(140%) hue-rotate(-10deg)" }, 
+  { name: "Cool", value: "brightness(1.05) contrast(1.05) saturate(1.05) hue-rotate(8deg)" }, 
+  { name: "B&W", value: "grayscale(100%)" }, 
 ];
 
 const LAYOUT = {
@@ -117,6 +117,7 @@ export default function Home() {
     new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new window.Image();
       img.src = src;
+      img.crossOrigin = "anonymous"; // ✅ CORS 대응
       img.onload = () => resolve(img);
       img.onerror = () => reject(new Error(`Failed to load image at ${src}`));
     });
@@ -125,7 +126,7 @@ export default function Home() {
     frameSrc: string,
     photoList: string[] = photos,
     isDownload = false,
-    filterVal: string = selectedFilter
+    filterVal: string = selectedFilter 
   ) => {
     const canvas = canvasRef.current;
     if (!canvas || photoList.length < 4) return;
@@ -136,18 +137,26 @@ export default function Home() {
     canvas.width = LAYOUT.canvasW * scale;
     canvas.height = LAYOUT.canvasH * scale;
 
+    // ✅ 초기화 및 배경 채우기 복구
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     try {
       const images = await Promise.all(photoList.map(loadImage));
+      
+      // ✅ 필터 적용 범위 한정 (save/restore) 복구
+      ctx.save();
       ctx.filter = filterVal;
       for (let i = 0; i < images.length; i++) {
         ctx.drawImage(images[i], LAYOUT.x * scale, LAYOUT.yList[i] * scale, LAYOUT.w * scale, LAYOUT.h * scale);
       }
-      ctx.filter = "none";
+      ctx.restore(); 
+      
+      // ✅ 프레임은 필터 없이 원색 그대로 드로잉
       const frame = await loadImage(frameSrc);
       ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+      
       setResultImage(canvas.toDataURL("image/png"));
     } catch (e) { console.error(e); }
   }, [photos, selectedFilter]);
@@ -195,7 +204,7 @@ export default function Home() {
 
   return (
     <div className="container">
-      {/* HEADER - 공통 상단 */}
+      {/* HEADER */}
       <header className="header">
         <h1 className="logo animate-pop" onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
           <img 
@@ -215,13 +224,8 @@ export default function Home() {
       {/* 1. START LANDING PAGE */}
       {step === "start" && (
         <div className="landing-wrap animate-up">
-          <div className="peek-frame left">
-            <img src={FRAME_CATEGORIES.CUTE.items[0]} alt="" />
-          </div>
-          <div className="peek-frame right">
-            <img src={FRAME_CATEGORIES.SPECIAL.items[0]} alt="" />
-          </div>
-
+          <div className="peek-frame left"><img src={FRAME_CATEGORIES.CUTE.items[0]} alt="" /></div>
+          <div className="peek-frame right"><img src={FRAME_CATEGORIES.SPECIAL.items[0]} alt="" /></div>
           <div className="hero-content">
             <div className="badge">NEW MOMENT</div>
             <h2>Capture your daily <br/>life in 4 cuts.</h2>
@@ -282,8 +286,7 @@ export default function Home() {
                     <button key={key} className={`cat-btn ${currentCat === key ? "active" : ""}`}
                       onClick={() => {
                         setCurrentCat(key);
-                        const firstFrame = FRAME_CATEGORIES[key].items[0];
-                        setSelectedFrame(firstFrame);
+                        setSelectedFrame(FRAME_CATEGORIES[key].items[0]);
                       }}>
                       {FRAME_CATEGORIES[key].name}
                     </button>
@@ -293,9 +296,8 @@ export default function Home() {
 
               <section className="ctrl-section">
                 <label>SELECT FRAME</label>
-                {/* ✅ 요구사항: 스크롤 안되게 4개만 딱 맞춘 격자 레이아웃 */}
-                <div className="frame-grid-fixed">
-                  {FRAME_CATEGORIES[currentCat].items.slice(0, 4).map((f) => (
+                <div className="frame-grid custom-scroll">
+                  {FRAME_CATEGORIES[currentCat].items.map((f) => (
                     <div key={f} className={`frame-item ${selectedFrame === f ? "active" : ""}`}
                       onClick={() => setSelectedFrame(f)}>
                       <img src={f} className="f-thumb" alt="" />
@@ -305,8 +307,7 @@ export default function Home() {
               </section>
             </div>
           </div>
-          {/* ✅ 요구사항: 버튼 위치를 위로 올려 스크롤 없이 바로 보이게 조절 */}
-          <button className="btn-main mt-10 shadow-blue" onClick={async () => {
+          <button className="btn-main mt-auto shadow-blue" onClick={async () => {
             await renderImage(selectedFrame, photos, true, selectedFilter);
             setStep("result");
           }}>
@@ -319,7 +320,6 @@ export default function Home() {
       {step === "result" && resultImage && (
         <div className="mainContent animate-up center">
           <img src={resultImage} className="final-img shadow-card" alt="Final Result" />
-          
           <div className="share-panel">
             <p className="share-label">SHARE MOMENT</p>
             <div className="share-btns">
@@ -328,9 +328,8 @@ export default function Home() {
               <button onClick={shareFacebook} className="s-btn fb">FB</button>
             </div>
           </div>
-
           <div className="footer-actions">
-            <a href={resultImage} download="snapi_booth.png" className="btn-main deco-none text-center shadow-blue">이미지 저장하기</a>
+            <a href={resultImage} download="soykko_booth.png" className="btn-main deco-none text-center shadow-blue">이미지 저장하기</a>
             <button className="btn-sub" onClick={() => window.location.reload()}>다시 찍기</button>
           </div>
         </div>
@@ -339,15 +338,10 @@ export default function Home() {
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
       <style jsx>{`
-        /* --- Base Theme --- */
-        :global(body) { background: #f8fafc; margin: 0; padding: 0; overflow: hidden; touch-action: none; }
-        .container { max-width: 450px; margin: 0 auto; background: #f8fafc; color: #1e293b; height: 100vh; padding: 20px; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; position: relative; overflow: hidden; }
-
-        /* --- Header --- */
-        .header { text-align: center; margin-bottom: 24px; padding-top: 10px; z-index: 10; flex-shrink: 0; }
+        :global(body) { background: #f8fafc; margin: 0; padding: 0; }
+        .container { max-width: 450px; margin: 0 auto; background: #f8fafc; color: #1e293b; min-height: 100vh; padding: 20px; font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; position: relative; overflow-x: hidden; }
+        .header { text-align: center; margin-bottom: 24px; padding-top: 10px; z-index: 10; }
         .logo { font-size: 1.4rem; font-weight: 900; cursor: pointer; color: #1e293b; }
-
-        /* --- Landing Page --- */
         .landing-wrap { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; position: relative; }
         .hero-content h2 { font-size: 2.2rem; font-weight: 900; line-height: 1.2; margin: 15px 0; color: #0f172a; }
         .hero-content p { color: #64748b; font-weight: 500; }
@@ -356,62 +350,44 @@ export default function Home() {
         .peek-frame.left { left: -80px; top: 10%; transform: rotate(-15deg); }
         .peek-frame.right { right: -80px; bottom: 15%; transform: rotate(15deg); }
         .peek-frame img { width: 100%; border-radius: 4px; }
-
-        /* --- Components --- */
-        .mainContent { display: flex; flex-direction: column; flex: 1; gap: 20px; position: relative; z-index: 1; overflow: hidden; }
+        .mainContent { display: flex; flex-direction: column; flex: 1; gap: 24px; position: relative; z-index: 1; }
         .cameraCard { width: 100%; aspect-ratio: 4/3; border-radius: 28px; overflow: hidden; position: relative; background: #e2e8f0; border: 4px solid #fff; }
         .cameraCard.shooting { border-color: #2563eb; }
         .video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         .flash-overlay { position: absolute; inset: 0; background: #fff; z-index: 20; }
         .count-overlay { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; font-size: 100px; font-weight: 900; color: #fff; text-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 10; }
-
-        /* --- Buttons --- */
-        .btn-main { width: 100%; padding: 18px; background: #2563eb; color: #fff; border-radius: 20px; font-weight: 800; border: none; font-size: 1.05rem; cursor: pointer; transition: 0.3s; flex-shrink: 0; }
+        .btn-main { width: 100%; padding: 20px; background: #2563eb; color: #fff; border-radius: 20px; font-weight: 800; border: none; font-size: 1.05rem; cursor: pointer; transition: 0.3s; }
         .btn-sub { width: 100%; padding: 18px; background: #fff; color: #64748b; border: 1px solid #e2e8f0; border-radius: 20px; font-weight: 700; cursor: pointer; }
         .btn-shutter { width: 84px; height: 84px; border-radius: 50%; border: 8px solid #e2e8f0; background: #2563eb; color: #fff; font-weight: 900; cursor: pointer; }
         .shutter-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
         .hint { font-size: 0.8rem; color: #94a3b8; font-weight: 600; }
-
-        /* --- Editor --- */
-        .editor-layout { display: flex; gap: 15px; flex: 1; overflow: hidden; }
-        .photo-side { flex-shrink: 0; }
-        .preview-img { width: 120px; border-radius: 8px; background: #fff; padding: 4px; border: 1px solid #e2e8f0; }
-        .control-side { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+        .editor-layout { display: flex; gap: 15px; }
+        .preview-img { width: 130px; border-radius: 8px; background: #fff; padding: 4px; border: 1px solid #e2e8f0; }
+        .control-side { flex: 1; display: flex; flex-direction: column; gap: 15px; }
         .ctrl-section label { display: block; font-size: 0.65rem; font-weight: 800; color: #94a3b8; margin-bottom: 8px; letter-spacing: 1px; }
-
         .filter-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
         .filter-btn { padding: 6px 2px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.65rem; font-weight: 700; color: #64748b; cursor: pointer; transition: 0.2s; }
         .filter-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
-
         .cat-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
         .cat-btn { background: #fff; border: 1px solid #e2e8f0; color: #64748b; padding: 6px 10px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; cursor: pointer; }
         .cat-btn.active { background: #2563eb; color: #fff; }
-
-        /* ✅ 수정: 프레임 4개 딱 맞춘 고정 격자 (스크롤 방지) */
-        .frame-grid-fixed { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; width: 100%; }
-        .frame-item { aspect-ratio: 2/3; border-radius: 8px; border: 3px solid transparent; cursor: pointer; background: #eee; overflow: hidden; }
+        .frame-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 200px; overflow-y: auto; padding-right: 5px; }
+        .frame-item { aspect-ratio: 2/3; border-radius: 8px; border: 3px solid transparent; cursor: pointer; background: #eee; }
         .frame-item.active { border-color: #2563eb; }
         .f-thumb { width: 100%; height: 100%; object-fit: cover; }
-
-        /* --- Share Panel --- */
         .share-panel { width: 100%; background: #fff; border-radius: 20px; padding: 18px; border: 1px solid #e2e8f0; margin-bottom: 12px; }
         .share-label { font-size: 0.7rem; font-weight: 800; color: #94a3b8; margin-bottom: 12px; text-align: center; }
         .share-btns { display: flex; gap: 8px; }
         .s-btn { flex: 1; padding: 12px; background: #f1f5f9; border: none; border-radius: 14px; color: #475569; font-weight: 800; font-size: 0.75rem; cursor: pointer; }
         .s-btn.wa { background: #25D366; color: #fff; }
         .s-btn.fb { background: #1877F2; color: #fff; }
-
-        /* --- Utilities --- */
         .shadow-card { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
         .shadow-blue { box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2); }
         .center { align-items: center; text-align: center; }
-        .final-img { width: 180px; border-radius: 8px; background: #fff; padding: 5px; margin-bottom: 15px; }
-        .footer-actions { width: 100%; display: flex; flexDirection: column; gap: 10px; }
+        .final-img { width: 200px; border-radius: 8px; background: #fff; padding: 5px; margin-bottom: 15px; }
         .deco-none { text-decoration: none; }
-        .mt-10 { margin-top: 10px; }
-        .mt-20 { margin-top: 20px; }
-
-        /* --- Animations --- */
+        .custom-scroll::-webkit-scrollbar { width: 3px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         .animate-up { animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
         .animate-pop { animation: pop 0.4s cubic-bezier(0.17, 0.67, 0.83, 0.67); }
         @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
