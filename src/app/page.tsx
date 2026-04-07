@@ -266,11 +266,11 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
           <div className="mainContent animate-up">
             <div className="editor-layout">
               <div className="photo-side">
-                {resultImage && (
+               {resultImage && (
   <img 
+    key={resultImage}   // ⭐ 여기 추가
     src={resultImage} 
     className="preview-img shadow-card" 
-    
     alt="" 
   />
 )}
@@ -283,9 +283,9 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
                       <button 
                         key={f.name} 
                         className={`filter-btn ${selectedFilter === f.value ? "active" : ""}`}
-                        onClick={async () => {
+                        onClick={() => {
   setSelectedFilter(f.value);
-  await renderImage(selectedFrame, photos, false, f.value);
+  renderImage(selectedFrame, photos, false, f.value);
 }}
                       >
                         {f.name}
