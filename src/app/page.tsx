@@ -143,22 +143,28 @@
 
       try {
         const images = await Promise.all(
-    photoList.map((src) => loadImage(src))
+  photoList.map((src) => loadImage(src))
+);
+
+// ✅ 1. 사진 먼저 필터 적용해서 그림
+ctx.save(); // 상태 저장
+ctx.filter = filterVal;
+
+for (let i = 0; i < images.length; i++) {
+  ctx.drawImage(
+    images[i],
+    LAYOUT.x * scale,
+    LAYOUT.yList[i] * scale,
+    LAYOUT.w * scale,
+    LAYOUT.h * scale
   );
-  ctx.filter = filterVal; // ✅ 추가
-        // ✅ 모바일 브라우저 필터 강제 적용 로직
-        for (let i = 0; i < images.length; i++) {
-    ctx.drawImage(
-      images[i],
-      LAYOUT.x * scale,
-      LAYOUT.yList[i] * scale,
-      LAYOUT.w * scale,
-      LAYOUT.h * scale
-    );
-  }
-        ctx.filter = "none"; // ✅ 추가
-        const frame = await loadImage(frameSrc);
-        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+}
+
+ctx.restore(); // ✅ filter 완전 초기화
+
+// ✅ 2. 프레임은 필터 없이 그림
+const frame = await loadImage(frameSrc);
+ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
         
         setResultImage(canvas.toDataURL("image/png"));
       } catch (e) { console.error(e); }
