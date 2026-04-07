@@ -270,7 +270,7 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
   <img 
     src={resultImage} 
     className="preview-img shadow-card" 
-    style={{ filter: selectedFilter }} 
+    
     alt="" 
   />
 )}
@@ -334,8 +334,7 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
           <div className="mainContent animate-up center">
             <img 
   src={resultImage} 
-  className="final-img shadow-card" 
-  style={{ filter: selectedFilter }} 
+  className="final-img shadow-card"  
   alt="Final Result" 
 />
             <div className="share-panel">
