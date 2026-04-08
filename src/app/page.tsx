@@ -252,13 +252,25 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
               {flash && <div className="flash-overlay" />}
             </div>
             <div className="actionArea">
-              <div className="shutter-wrap">
-                <button className="btn-shutter" disabled={isShooting} onClick={startAutoShoot}>
-                  {isShooting ? "" : "Pulsa"}
-                </button>
-                <p className="hint">Haz clic y crea tus 4 fotos</p>
-              </div>
-            </div>
+  <div className="shutter-wrap">
+    <button className="btn-shutter" disabled={isShooting} onClick={startAutoShoot}>
+      {/* 촬영 중일 때 1/4, 2/4 진행도가 버튼에 나타납니다 */}
+      {isShooting ? `${photos.length + 1}/4` : "Pulsa"}
+    </button>
+    <p className="hint">Haz clic y crea tus 4 fotos</p>
+  </div>
+  
+  {/* 하단에 지금까지 찍은 사진 4칸 미리보기 추가 */}
+  <div className="recent-photos-bar">
+    {photos.map((p, i) => (
+      <img key={i} src={p} alt="" className="mini-photo animate-pop" />
+    ))}
+    {/* 아직 찍지 않은 남은 칸들을 회색 박스로 표시 */}
+    {Array.from({ length: 4 - photos.length }).map((_, i) => (
+      <div key={i} className="mini-photo-empty" />
+    ))}
+  </div>
+</div>
           </div>
         )}
 
@@ -312,13 +324,14 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
                 <section className="ctrl-section">
                   <label>SELECT FRAME</label>
                   <div className="frame-grid no-scroll">
-                    {FRAME_CATEGORIES[currentCat].items.map((f) => (
-                      <div key={f} className={`frame-item ${selectedFrame === f ? "active" : ""}`}
-                        onClick={() => setSelectedFrame(f)}>
-                        <img src={f} className="f-thumb" alt="" />
-                      </div>
-                    ))}
-                  </div>
+  {FRAME_CATEGORIES[currentCat].items.map((f) => (
+    /* 클래스 이름을 frame-item-compact로 바꿔서 높이를 줄입니다 */
+    <div key={f} className={`frame-item-compact ${selectedFrame === f ? "active" : ""}`}
+      onClick={() => setSelectedFrame(f)}>
+      <img src={f} className="f-thumb" alt="" />
+    </div>
+  ))}
+</div>
                 </section>
 
                 {/* ✅ 다운로드 버튼을 컨트롤 사이드 하단으로 이동 (접근성 향상) */}
@@ -410,9 +423,57 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
             gap: 6px; 
             min-height: 150px;
           }
-          .frame-item { aspect-ratio: 620/2100; border-radius: 4px; border: 2px solid transparent; cursor: pointer; background: #f1f5f9; overflow: hidden; }
-          .frame-item.active { border-color: #2563eb; }
-          .f-thumb { width: 100%; height: 100%; object-fit: cover; }
+          /* 프레임 선택창 디자인: 높이를 줄이고 둥글게 */
+.frame-item-compact { 
+  aspect-ratio: 1 / 1.1; 
+  border-radius: 12px; 
+  border: 2px solid transparent; 
+  cursor: pointer; 
+  background: #f1f5f9; 
+  overflow: hidden; 
+}
+.frame-item-compact.active { border-color: #2563eb; transform: scale(1.02); }
+
+/* 이미지의 아래쪽(로고 부분)이 보이도록 고정 */
+.f-thumb { 
+  width: 100%; 
+  height: 100%; 
+  object-fit: cover; 
+  object-position: bottom; 
+}
+
+/* 카메라 모드 하단 미리보기 사진 스타일 */
+.recent-photos-bar {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+  min-height: 70px;
+}
+.mini-photo {
+  width: 50px;
+  height: 65px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.mini-photo-empty {
+  width: 50px;
+  height: 65px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  border: 2px dashed #cbd5e1;
+}
+
+/* 프레임 그리드 높이 제한하여 버튼이 올라오게 수정 */
+.frame-grid.no-scroll { 
+  display: grid; 
+  grid-template-columns: repeat(2, 1fr); 
+  gap: 8px; 
+  max-height: 180px; 
+  overflow-y: auto; 
+}
 
           .share-panel { width: 100%; background: #fff; border-radius: 20px; padding: 15px; border: 1px solid #e2e8f0; }
           .share-label { font-size: 0.7rem; font-weight: 800; color: #94a3b8; margin-bottom: 10px; text-align: center; }
