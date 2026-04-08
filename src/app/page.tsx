@@ -16,7 +16,7 @@
     },
     SPECIAL: {
       name: "Especial",
-      items: createFrameList("/frames/special", "special", 3)
+      items: createFrameList("/frames/special", "special", 1)
     },
   };
 
