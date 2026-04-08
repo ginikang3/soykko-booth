@@ -77,7 +77,19 @@
       return () => clearTimeout(timer);
     }
   }, [step]);
+useEffect(() => {
+  if (step === "camera") {
+    // 광고 script 제거
+    document.getElementById("vignette-ad")?.remove();
 
+    // iframe까지 제거 (핵심)
+    document.querySelectorAll("iframe").forEach((el) => {
+      if (el.src.includes("n6wxm.com")) {
+        el.remove();
+      }
+    });
+  }
+}, [step]);
     const startCamera = async () => {
       setStep("camera");
       try {
