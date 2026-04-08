@@ -171,26 +171,36 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
     }, [photos, selectedFilter]);
 
     const startAutoShoot = async () => {
-      if (isShooting) return;
-      setIsShooting(true);
-      const temp: string[] = [];
-      for (let i = 0; i < 4; i++) {
-        for (let t = 5; t > 0; t--) {
-          setCountdown(t);
-          await new Promise((r) => setTimeout(r, 1000));
-        }
-        setCountdown(null);
-        setFlash(true);
-        setTimeout(() => setFlash(false), 120);
-        shutterSoundRef.current?.play().catch(() => {});
-        const img = capture();
-        if (img) temp.push(img);
-        await new Promise((r) => setTimeout(r, 400));
-      }
-      setPhotos(temp);
-      setIsShooting(false);
-      setStep("preview");
-    };
+  if (isShooting) return;
+  setIsShooting(true);
+  
+  // 촬영 시작 전 사진첩 비우기
+  setPhotos([]); 
+  const currentPhotos: string[] = [];
+
+  for (let i = 0; i < 4; i++) {
+    for (let t = 5; t > 0; t--) {
+      setCountdown(t);
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    setCountdown(null);
+    setFlash(true);
+    setTimeout(() => setFlash(false), 120);
+    shutterSoundRef.current?.play().catch(() => {});
+    
+    const img = capture();
+    if (img) {
+      // 찰칵! 소리와 함께 사진을 즉시 리스트에 추가 (실시간 업데이트)
+      currentPhotos.push(img);
+      setPhotos([...currentPhotos]); 
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+
+  setIsShooting(false);
+  // 모든 촬영이 끝나고 0.5초 뒤에 편집 화면으로 이동
+  setTimeout(() => setStep("preview"), 500);
+};
 
     useEffect(() => {
       if (photos.length === 4) renderImage(selectedFrame, photos, false, selectedFilter);
@@ -451,28 +461,59 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
   min-height: 70px;
 }
 .mini-photo {
-  width: 50px;
-  height: 65px;
+  /* 가로 길이를 조금 늘리고 비율을 4:3으로 고정 */
+  width: 70px; 
+  aspect-ratio: 4 / 3; 
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 2px solid #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
+
 .mini-photo-empty {
-  width: 50px;
-  height: 65px;
-  background: #e2e8f0;
-  border-radius: 6px;
-  border: 2px dashed #cbd5e1;
+  /* 빈 칸도 사진과 똑같은 크기로 설정 */
+  width: 70px;
+  aspect-ratio: 4 / 3;
+  background: #f1f5f9;
+  border-radius: 8px;
+  border: 2px dashed #e2e8f0;
+}
+
+/* 사진들이 너무 다닥다닥 붙지 않게 간격 살짝 조정 */
+.recent-photos-bar {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 25px;
+  min-height: 60px;
 }
 
 /* 프레임 그리드 높이 제한하여 버튼이 올라오게 수정 */
 .frame-grid.no-scroll { 
   display: grid; 
-  grid-template-columns: repeat(2, 1fr); 
-  gap: 8px; 
-  max-height: 180px; 
-  overflow-y: auto; 
+  /* 한 줄에 3개씩 배치해서 더 많이 보이게 수정 */
+  grid-template-columns: repeat(3, 1fr); 
+  gap: 10px; 
+  /* 스크롤 제거 */
+  max-height: none; 
+  overflow: visible; 
+  padding: 5px 0;
+}
+
+.frame-item-compact { 
+  aspect-ratio: 1 / 1.2; /* 비율을 살짝 더 보기 좋게 조정 */
+  border-radius: 12px; 
+  border: 3px solid transparent; /* 테두리를 조금 더 두껍게 해서 선택 표시 강조 */
+  cursor: pointer; 
+  background: #f1f5f9; 
+  overflow: hidden; 
+  transition: all 0.2s ease;
+}
+
+.frame-item-compact.active { 
+  border-color: #2563eb; 
+  transform: scale(1.05); /* 선택 시 살짝 커지는 효과 추가 */
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
 
           .share-panel { width: 100%; background: #fff; border-radius: 20px; padding: 15px; border: 1px solid #e2e8f0; }
