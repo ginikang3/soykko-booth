@@ -42,7 +42,7 @@
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
     const [streaming, setStreaming] = useState(false);
-    const [step, setStep] = useState<"start" | "camera" | "preview" | "result">("start");
+    const [step, setStep] = useState<"start" | "camera" | "loading" | "preview" | "result">("start");
     const [photos, setPhotos] = useState<string[]>([]);
     
     const [currentCat, setCurrentCat] = useState<keyof typeof FRAME_CATEGORIES>("BASIC");
@@ -59,6 +59,24 @@
     useEffect(() => {
       shutterSoundRef.current = new Audio("/shutter.mp3");
     }, []);
+    // ✅ 로딩 단계에서 광고 주입 및 3초 대기 로직
+  useEffect(() => {
+    if (step === "loading") {
+      // 1. 광고 즉시 주입
+      const oldScript = document.getElementById('vignette-ad');
+      if (oldScript) oldScript.remove();
+      const script = document.createElement('script');
+      script.id = 'vignette-ad';
+      script.innerHTML = `(function(s){s.dataset.zone='10848770',s.src='https://n6wxm.com/vignette.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))`;
+      document.body.appendChild(script);
+
+      // 2. 3초 뒤에 편집 화면으로 이동
+      const timer = setTimeout(() => {
+        setStep("preview");
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [step]);
 
     const startCamera = async () => {
       setStep("camera");
@@ -189,37 +207,35 @@
 }, [photos, selectedFilter]);
 
     const startAutoShoot = async () => {
-  if (isShooting) return;
-  setIsShooting(true);
-  // ✅ 22초 뒤에 전면 광고(Vignette) 실행 로직 추가
-      
-  // 촬영 시작 전 사진첩 비우기
-  setPhotos([]); 
-  const currentPhotos: string[] = [];
+      if (isShooting) return;
+      setIsShooting(true);
 
-  for (let i = 0; i < 4; i++) {
-    for (let t = 5; t > 0; t--) {
-      setCountdown(t);
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-    setCountdown(null);
-    setFlash(true);
-    setTimeout(() => setFlash(false), 120);
-    shutterSoundRef.current?.play().catch(() => {});
-    
-    const img = capture();
-    if (img) {
-      // 찰칵! 소리와 함께 사진을 즉시 리스트에 추가 (실시간 업데이트)
-      currentPhotos.push(img);
-      setPhotos([...currentPhotos]); 
-    }
-    await new Promise((r) => setTimeout(r, 400));
-  }
+      // 촬영 시작 전 사진첩 비우기
+      setPhotos([]); 
+      const currentPhotos: string[] = [];
 
-  setIsShooting(false);
-  // 모든 촬영이 끝나고 0.5초 뒤에 편집 화면으로 이동
-  setTimeout(() => setStep("preview"), 500);
-};
+      for (let i = 0; i < 4; i++) {
+        for (let t = 5; t > 0; t--) {
+          setCountdown(t);
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+        setCountdown(null);
+        setFlash(true);
+        setTimeout(() => setFlash(false), 120);
+        shutterSoundRef.current?.play().catch(() => {});
+        
+        const img = capture();
+        if (img) {
+          currentPhotos.push(img);
+          setPhotos([...currentPhotos]); 
+        }
+        await new Promise((r) => setTimeout(r, 400));
+      }
+
+      setIsShooting(false);
+      // ✅ 촬영 종료 후 0.5초 뒤에 로딩 화면으로 진입
+      setTimeout(() => setStep("loading"), 500);
+    };
 
     useEffect(() => {
       if (photos.length === 4) renderImage(selectedFrame, photos, false, selectedFilter);
@@ -273,7 +289,14 @@
             </div>
           </div>
         )}
-
+{/* 카메라 촬영 후, 편집창 가기 전 로딩 화면 */}
+        {step === "loading" && (
+          <div className="mainContent animate-up center" style={{ justifyContent: 'center', minHeight: '50vh' }}>
+            <div className="loading-spinner" />
+            <h2 style={{ marginTop: '20px', fontWeight: '800' }}>Procesando...</h2>
+            <p style={{ color: '#64748b' }}>Preparando tus 4 fotos</p>
+          </div>
+        )}
         {step === "camera" && (
           <div className="mainContent animate-up">
             <div className={`cameraCard shadow-card ${isShooting ? "shooting" : ""}`}>
@@ -549,6 +572,20 @@
           .pulse { animation: pulse-shadow 2s infinite; }
           @keyframes pulse-shadow { 0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(37, 99, 235, 0); } 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); } }
           .mt-10 { margin-top: 10px; }
+          /* 로딩 스피너 애니메이션 (맨 아래에 붙여넣으세요) */
+        .loading-spinner {
+          width: 50px;
+          height: 50px;
+          border: 5px solid #e2e8f0;
+          border-top: 5px solid #2563eb; /* 포인트 컬러 */
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin: 0 auto;
+        }
+        @keyframes spin { 
+          0% { transform: rotate(0deg); } 
+          100% { transform: rotate(360deg); } 
+        }
         `}</style>
       </div>
     );
