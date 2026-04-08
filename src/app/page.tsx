@@ -7,25 +7,25 @@
 
   const FRAME_CATEGORIES = {
     BASIC: {
-      name: "Standard",
+      name: "Básico",
       items: createFrameList("/frames/basic", "basic", 4)
     },
     CUTE: {
-      name: "Cute",
+      name: "Lindo",
       items: createFrameList("/frames/cute", "cute", 4)
     },
     SPECIAL: {
-      name: "Special",
+      name: "Especial",
       items: createFrameList("/frames/special", "special", 3)
     },
   };
 
   const FILTERS = [
     { name: "Original", value: "none" },
-    { name: "Bright", value: "brightness(1.1) contrast(1.1) saturate(1.1)" }, 
-    { name: "Warm", value: "sepia(20%) saturate(140%) hue-rotate(-10deg)" }, 
-    { name: "Cool", value: "brightness(1.05) contrast(1.05) saturate(1.05) hue-rotate(8deg)" }, 
-    { name: "B&W", value: "grayscale(100%)" }, 
+    { name: "Claro", value: "brightness(1.1) contrast(1.1) saturate(1.1)" }, 
+    { name: "Cálido", value: "sepia(20%) saturate(140%) hue-rotate(-10deg)" }, 
+    { name: "Frío", value: "brightness(1.05) contrast(1.05) saturate(1.05) hue-rotate(8deg)" }, 
+    { name: "B y N", value: "grayscale(100%)" }, 
   ];
 
   const LAYOUT = {
@@ -234,11 +234,11 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
             <div className="peek-frame left"><img src={FRAME_CATEGORIES.CUTE.items[0]} alt="" /></div>
             <div className="peek-frame right"><img src={FRAME_CATEGORIES.SPECIAL.items[0]} alt="" /></div>
             <div className="hero-content">
-              <div className="badge">NEW MOMENT</div>
-              <h2>Capture your daily <br/>life in 4 cuts.</h2>
-              <p>멕시코에서 가장 힙한 네컷 사진 찍기</p>
+              <div className="badge">Nuevo momento</div>
+              <h2>4 fotos<br/>un estilo único </h2>
+              <p>Tu día en 4 fotos</p>
               <button className="btn-main pulse mt-20" onClick={startCamera}>
-                4컷 사진 찍기 시작 📸
+                Captura tus 4 momentos
               </button>
             </div>
           </div>
@@ -254,9 +254,9 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
             <div className="actionArea">
               <div className="shutter-wrap">
                 <button className="btn-shutter" disabled={isShooting} onClick={startAutoShoot}>
-                  {isShooting ? "" : "TAP"}
+                  {isShooting ? "" : "Pulsa"}
                 </button>
-                <p className="hint">버튼을 누르면 5초 간격으로 촬영됩니다</p>
+                <p className="hint">Haz clic y crea tus 4 fotos</p>
               </div>
             </div>
           </div>
@@ -277,7 +277,7 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
               </div>
               <div className="control-side">
                 <section className="ctrl-section">
-                  <label>FILTER</label>
+                  <label>FILTRO</label>
                   <div className="filter-grid">
                     {FILTERS.map((f) => (
                       <button 
@@ -295,7 +295,7 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
                 </section>
 
                 <section className="ctrl-section">
-                  <label>CATEGORY</label>
+                  <label>Categoría</label>
                   <div className="cat-tabs">
                     {(Object.keys(FRAME_CATEGORIES) as Array<keyof typeof FRAME_CATEGORIES>).map((key) => (
                       <button key={key} className={`cat-btn ${currentCat === key ? "active" : ""}`}
@@ -335,7 +335,7 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
 
   setStep("result");
 }}>
-                  DOWNLOAD READY
+                  Descarga lista
                 </button>
               </div>
             </div>
@@ -349,8 +349,11 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
   className="final-img shadow-card"  
   alt="Final Result" 
 />
+<p style={{ fontSize: "13px", marginTop: "10px", fontWeight: "600" }}>
+  📱 Mantén presionado para guardar
+</p>
             <div className="share-panel">
-              <p className="share-label">SHARE MOMENT</p>
+              <p className="share-label">Comparte el momento</p>
               <div className="share-btns">
                 <button onClick={shareLink} className="s-btn">LINK</button>
                 <button onClick={shareWhatsApp} className="s-btn wa">WA</button>
@@ -358,8 +361,7 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
               </div>
             </div>
             <div className="footer-actions">
-              <a href={resultImage} download="soykko_booth.png" className="btn-main deco-none text-center shadow-blue">이미지 저장하기</a>
-              <button className="btn-sub" onClick={() => window.location.reload()}>다시 찍기</button>
+              <button className="btn-sub" onClick={() => window.location.reload()}>Volver a tomar</button>
             </div>
           </div>
         )}
