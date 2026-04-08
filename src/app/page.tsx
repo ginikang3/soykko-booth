@@ -241,10 +241,17 @@
 
     return (
       <div className="container">
-        {/* 광고 스크립트 추가 */}
+        {/* 1. 전면 광고 (Vignette) */}
         <div dangerouslySetInnerHTML={{
           __html: `<script>(function(s){s.dataset.zone='10848770',s.src='https://n6wxm.com/vignette.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>`
         }} />
+        
+        {/* 2. 하단 배너 (In-Page Push) - 촬영 중엔 숨김 */}
+        {step !== "camera" && (
+          <div dangerouslySetInnerHTML={{
+            __html: `<script>(function(s){s.dataset.zone='10848793',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>`
+          }} />
+        )}
         
         <header className="header">
           <h1 className="logo animate-pop" onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
