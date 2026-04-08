@@ -1,29 +1,24 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
+import Script from "next/script";
 
-const inter = Inter({ subsets: ["latin"] });
-
-export const metadata: Metadata = {
-  title: "Snapi - Tu estilo único",
-  description: "Captura tus 4 momentos",
-};
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className={inter.className}>
-        {/* Push Notifications 광고 스크립트 */}
-        <div dangerouslySetInnerHTML={{
-          __html: `<script src="https://5gvci.com/act/files/tag.min.js?z=10848796" data-cfasync="false" async></script>`
-        }} />
-        
-        {children}
-      </body>
+      <head>
+        {/* Monetag Vignette 광고 스크립트 */}
+        <Script
+          id="monetag-vignette"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function(s){
+                s.dataset.zone='10848770';
+                s.src='https://n6wxm.com/vignette.min.js';
+              })([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))
+            `,
+          }}
+        />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
