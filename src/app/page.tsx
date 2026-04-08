@@ -241,6 +241,11 @@
 
     return (
       <div className="container">
+        {/* 광고 스크립트 추가 */}
+        <div dangerouslySetInnerHTML={{
+          __html: `<script>(function(s){s.dataset.zone='10848770',s.src='https://n6wxm.com/vignette.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>`
+        }} />
+        
         <header className="header">
           <h1 className="logo animate-pop" onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
             <img 
@@ -367,18 +372,9 @@
                 {/* ✅ 다운로드 버튼을 컨트롤 사이드 하단으로 이동 (접근성 향상) */}
                 <button 
   className="btn-main shadow-blue mt-10" 
-  style={{ 
-    padding: '15px', 
-    fontSize: '0.9rem',
-    width: '90%',
-    margin: '10px auto',
-    display: 'block'
-  }} 
+  style={{ padding: '15px', fontSize: '0.9rem', width: '90%', margin: '10px auto', display: 'block' }} 
   onClick={async () => {
     await renderImage(selectedFrame, photos, true, selectedFilter);
-    // 화면 갱신을 기다리는 코드
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
     setStep("result");
   }}
 >
