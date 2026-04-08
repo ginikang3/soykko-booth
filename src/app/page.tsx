@@ -143,32 +143,33 @@
 
       try {
         const images = await Promise.all(
-  photoList.map((src) => loadImage(src))
-);
+          photoList.map((src) => loadImage(src))
+        );
 
-// ✅ 1. 사진 먼저 필터 적용해서 그림
-// ✅ 사진 그리기 (iOS 호환성 강화 버전)
-for (let i = 0; i < images.length; i++) {
-  ctx.save(); // 각 사진마다 상태 저장
-  
-  // iOS 크롬/사파리 대응: 필터 값이 있으면 적용
-  if (filterVal && filterVal !== "none") {
-    ctx.filter = filterVal; 
-  }
+        // ✅ 사진 그리기: 임시 캔버스를 사용하여 iOS 필터 버그 해결
+        for (let i = 0; i < images.length; i++) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = LAYOUT.w * scale;
+          tempCanvas.height = LAYOUT.h * scale;
+          const tempCtx = tempCanvas.getContext('2d');
 
-  ctx.drawImage(
-    images[i],
-    LAYOUT.x * scale,
-    LAYOUT.yList[i] * scale,
-    LAYOUT.w * scale,
-    LAYOUT.h * scale
-  );
-  
-  ctx.restore(); // 사진 한 장 그릴 때마다 필터 초기화
-}
-// ✅ 2. 프레임은 필터 없이 그림
-const frame = await loadImage(frameSrc);
-ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+          if (tempCtx) {
+            if (filterVal && filterVal !== "none") {
+              tempCtx.filter = filterVal;
+            }
+            tempCtx.drawImage(images[i], 0, 0, tempCanvas.width, tempCanvas.height);
+            ctx.drawImage(
+              tempCanvas,
+              LAYOUT.x * scale,
+              LAYOUT.yList[i] * scale,
+              LAYOUT.w * scale,
+              LAYOUT.h * scale
+            );
+          }
+        }
+
+        const frame = await loadImage(frameSrc);
+        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
         
         setResultImage(canvas.toDataURL("image/png"));
       } catch (e) { console.error(e); }
