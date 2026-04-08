@@ -267,7 +267,9 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
       {/* 촬영 중일 때 1/4, 2/4 진행도가 버튼에 나타납니다 */}
       {isShooting ? `${photos.length + 1}/4` : "Pulsa"}
     </button>
-    <p className="hint">Haz clic y crea tus 4 fotos</p>
+    <p className="hint" style={{ fontSize: '1.5rem', marginTop: '5px' }}>
+  Haz clic y crea tus 4 fotos
+</p>
   </div>
   
   {/* 하단에 지금까지 찍은 사진 4칸 미리보기 추가 */}
@@ -345,21 +347,25 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
                 </section>
 
                 {/* ✅ 다운로드 버튼을 컨트롤 사이드 하단으로 이동 (접근성 향상) */}
-                <button className="btn-main shadow-blue mt-10" style={{ padding: '15px', fontSize: '0.9rem' }} onClick={async () => {
-  await renderImage(selectedFrame, photos, true, selectedFilter);
-
-  await new Promise<void>((resolve) =>
-    requestAnimationFrame(() => resolve())
-  );
-
-  await new Promise<void>((resolve) =>
-    requestAnimationFrame(() => resolve())
-  );
-
-  setStep("result");
-}}>
-                  Descarga lista
-                </button>
+                <button 
+  className="btn-main shadow-blue mt-10" 
+  style={{ 
+    padding: '15px', 
+    fontSize: '0.9rem',
+    width: '90%',
+    margin: '10px auto',
+    display: 'block'
+  }} 
+  onClick={async () => {
+    await renderImage(selectedFrame, photos, true, selectedFilter);
+    // 화면 갱신을 기다리는 코드
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    setStep("result");
+  }}
+>
+  Descarga lista
+</button>
               </div>
             </div>
           </div>
@@ -372,7 +378,7 @@ ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
   className="final-img shadow-card"  
   alt="Final Result" 
 />
-<p style={{ fontSize: "13px", marginTop: "10px", fontWeight: "600" }}>
+<p style={{ fontSize: "1.1rem", marginTop: "15px", fontWeight: "800", color: "#1e293b" }}>
   📱 Mantén presionado para guardar
 </p>
             <div className="share-panel">
