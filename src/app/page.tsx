@@ -123,57 +123,70 @@
     
 
     const renderImage = useCallback(async (
-      frameSrc: string,
-      photoList: string[] = photos,
-      isDownload = false,
-      filterVal: string = selectedFilter 
-    ) => {
-      const canvas = canvasRef.current;
-      if (!canvas || photoList.length < 4) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+  frameSrc: string,
+  photoList: string[] = photos,
+  isDownload = false,
+  filterVal: string = selectedFilter 
+) => {
+  const canvas = canvasRef.current;
+  if (!canvas || photoList.length < 4) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
-      const scale = isDownload ? 2 : 1;
-      canvas.width = LAYOUT.canvasW * scale;
-      canvas.height = LAYOUT.canvasH * scale;
+  const scale = isDownload ? 2 : 1;
+  canvas.width = LAYOUT.canvasW * scale;
+  canvas.height = LAYOUT.canvasH * scale;
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      try {
-        const images = await Promise.all(
-          photoList.map((src) => loadImage(src))
-        );
+  try {
+    const images = await Promise.all(photoList.map((src) => loadImage(src)));
 
-        // ✅ 사진 그리기: 임시 캔버스를 사용하여 iOS 필터 버그 해결
-        for (let i = 0; i < images.length; i++) {
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = LAYOUT.w * scale;
-          tempCanvas.height = LAYOUT.h * scale;
-          const tempCtx = tempCanvas.getContext('2d');
+    for (let i = 0; i < images.length; i++) {
+      const x = LAYOUT.x * scale;
+      const y = LAYOUT.yList[i] * scale;
+      const w = LAYOUT.w * scale;
+      const h = LAYOUT.h * scale;
 
-          if (tempCtx) {
-            if (filterVal && filterVal !== "none") {
-              tempCtx.filter = filterVal;
-            }
-            tempCtx.drawImage(images[i], 0, 0, tempCanvas.width, tempCanvas.height);
-            ctx.drawImage(
-              tempCanvas,
-              LAYOUT.x * scale,
-              LAYOUT.yList[i] * scale,
-              LAYOUT.w * scale,
-              LAYOUT.h * scale
-            );
+      // 1. 사진을 먼저 그립니다.
+      ctx.drawImage(images[i], x, y, w, h);
+
+      // 2. 필터가 설정된 경우 픽셀 데이터를 직접 수정 (iOS 호환성 100%)
+      if (filterVal && filterVal !== "none") {
+        const imageData = ctx.getImageData(x, y, w, h);
+        const data = imageData.data;
+
+        for (let j = 0; j < data.length; j += 4) {
+          const r = data[j];
+          const g = data[j + 1];
+          const b = data[j + 2];
+
+          if (filterVal.includes("grayscale(100%)")) {
+            const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            data[j] = data[j + 1] = data[j + 2] = gray;
+          } else if (filterVal.includes("sepia")) {
+            data[j] = (r * 0.393) + (g * 0.769) + (b * 0.189);
+            data[j+1] = (r * 0.349) + (g * 0.686) + (b * 0.168);
+            data[j+2] = (r * 0.272) + (g * 0.534) + (b * 0.131);
+          } else if (filterVal.includes("brightness(1.1)")) {
+            data[j] = Math.min(255, r * 1.1);
+            data[j+1] = Math.min(255, g * 1.1);
+            data[j+2] = Math.min(255, b * 1.1);
           }
         }
+        ctx.putImageData(imageData, x, y);
+      }
+    }
 
-        const frame = await loadImage(frameSrc);
-        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-        
-        setResultImage(canvas.toDataURL("image/png"));
-      } catch (e) { console.error(e); }
-    }, [photos, selectedFilter]);
+    // 3. 마지막으로 프레임을 덮습니다.
+    const frame = await loadImage(frameSrc);
+    ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+    
+    setResultImage(canvas.toDataURL("image/png"));
+  } catch (e) { console.error(e); }
+}, [photos, selectedFilter]);
 
     const startAutoShoot = async () => {
   if (isShooting) return;
