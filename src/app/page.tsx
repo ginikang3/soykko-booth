@@ -147,10 +147,15 @@
 );
 
 // ✅ 1. 사진 먼저 필터 적용해서 그림
-ctx.save(); // 상태 저장
-ctx.filter = filterVal;
-
+// ✅ 사진 그리기 (iOS 호환성 강화 버전)
 for (let i = 0; i < images.length; i++) {
+  ctx.save(); // 각 사진마다 상태 저장
+  
+  // iOS 크롬/사파리 대응: 필터 값이 있으면 적용
+  if (filterVal && filterVal !== "none") {
+    ctx.filter = filterVal; 
+  }
+
   ctx.drawImage(
     images[i],
     LAYOUT.x * scale,
@@ -158,10 +163,9 @@ for (let i = 0; i < images.length; i++) {
     LAYOUT.w * scale,
     LAYOUT.h * scale
   );
+  
+  ctx.restore(); // 사진 한 장 그릴 때마다 필터 초기화
 }
-
-ctx.restore(); // ✅ filter 완전 초기화
-
 // ✅ 2. 프레임은 필터 없이 그림
 const frame = await loadImage(frameSrc);
 ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
