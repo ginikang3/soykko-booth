@@ -214,8 +214,11 @@
           setPhotos([...currentPhotos]); 
         }
         await new Promise((r) => setTimeout(r, 400));
-      }
-    };
+    }
+    // 이 아래 두 줄을 추가하세요
+    setIsShooting(false);
+    setStep("preview"); 
+  };
 
     useEffect(() => {
       if (photos.length === 4) renderImage(selectedFrame, photos, false, selectedFilter);
@@ -270,13 +273,6 @@
           </div>
         )}
 {/* 카메라 촬영 후, 편집창 가기 전 로딩 화면 */}
-        {step === "loading" && (
-          <div className="mainContent animate-up center" style={{ justifyContent: 'center', minHeight: '50vh' }}>
-            <div className="loading-spinner" />
-            <h2 style={{ marginTop: '20px', fontWeight: '800' }}>Procesando...</h2>
-            <p style={{ color: '#64748b' }}>Preparando tus 4 fotos</p>
-          </div>
-        )}
         {step === "camera" && (
           <div className="mainContent animate-up">
             <div className={`cameraCard shadow-card ${isShooting ? "shooting" : ""}`}>
@@ -397,22 +393,7 @@
     </p>
 
     {/* ✅ 광고주 모집 문구 및 이메일 추가 */}
-    <div style={{ 
-      marginTop: '12px', 
-      padding: '12px 0', 
-      fontSize: '0.85rem', 
-      color: '#64748b',
-      borderTop: '1px solid #e2e8f0',
-      width: '100%'
-    }}>
-      <p style={{ marginBottom: '4px', fontWeight: '700' }}>¿Tu marca aquí?</p>
-      <a 
-        href="mailto:kangsyoutube@naver.com?subject=[Snapi] Consulta de Publicidad" 
-        style={{ color: '#2563eb', textDecoration: 'underline' }}
-      >
-        kangsyoutube@naver.com
-      </a>
-    </div>
+    
 
     <div className="share-panel" style={{ marginTop: '15px' }}>
       <p className="share-label">Comparte el momento</p>
@@ -428,7 +409,25 @@
     </div>
   </div>
 )}
-
+{/* 📢 모든 페이지 하단 공통 광고주 모집 배너 */}
+    <div style={{ 
+      marginTop: 'auto', 
+      padding: '20px 0', 
+      textAlign: 'center',
+      fontSize: '0.85rem', 
+      color: '#64748b',
+      borderTop: '1px solid #e2e8f0',
+      width: '100%',
+      zIndex: 10
+    }}>
+      <p style={{ marginBottom: '4px', fontWeight: '700' }}>¿Tu marca aquí? Publicidad y Colaboraciones</p>
+      <a 
+        href="mailto:kangsyoutube@naver.com?subject=[Snapi] Consulta de Publicidad" 
+        style={{ color: '#2563eb', textDecoration: 'underline' }}
+      >
+        kangsyoutube@naver.com
+      </a>
+    </div>
         <canvas ref={canvasRef} style={{ display: "none" }} />
 
         <style jsx>{`
