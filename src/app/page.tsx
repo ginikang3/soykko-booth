@@ -420,7 +420,7 @@
       width: '100%',
       zIndex: 10
     }}>
-      <p style={{ marginBottom: '4px', fontWeight: '700' }}>¿Tu marca aquí? Publicidad y Colaboraciones</p>
+      <p style={{ marginBottom: '4px', fontWeight: '700' }}>¿Tienes alguna marca que quieras publicitar? <br />publicidad y colaboraciones</p>
       <a 
         href="mailto:kangsyoutube@naver.com?subject=[Snapi] Consulta de Publicidad" 
         style={{ color: '#2563eb', textDecoration: 'underline' }}
