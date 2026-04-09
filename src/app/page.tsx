@@ -60,36 +60,8 @@
       shutterSoundRef.current = new Audio("/shutter.mp3");
     }, []);
     // ✅ 로딩 단계에서 광고 주입 및 3초 대기 로직
-  useEffect(() => {
-    if (step === "loading") {
-      // 1. 광고 즉시 주입
-      const oldScript = document.getElementById('vignette-ad');
-      if (oldScript) oldScript.remove();
-      const script = document.createElement('script');
-      script.id = 'vignette-ad';
-      script.innerHTML = `(function(s){s.dataset.zone='10848770',s.src='https://n6wxm.com/vignette.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))`;
-      document.body.appendChild(script);
+  
 
-      // 2. 3초 뒤에 편집 화면으로 이동
-      const timer = setTimeout(() => {
-        setStep("preview");
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [step]);
-useEffect(() => {
-  if (step === "camera") {
-    // 광고 script 제거
-    document.getElementById("vignette-ad")?.remove();
-
-    // iframe까지 제거 (핵심)
-    document.querySelectorAll("iframe").forEach((el) => {
-      if (el.src.includes("n6wxm.com")) {
-        el.remove();
-      }
-    });
-  }
-}, [step]);
     const startCamera = async () => {
       setStep("camera");
       try {
@@ -243,10 +215,6 @@ useEffect(() => {
         }
         await new Promise((r) => setTimeout(r, 400));
       }
-
-      setIsShooting(false);
-      // ✅ 촬영 종료 후 0.5초 뒤에 로딩 화면으로 진입
-      setTimeout(() => setStep("loading"), 500);
     };
 
     useEffect(() => {
@@ -418,28 +386,48 @@ useEffect(() => {
         )}
 
         {step === "result" && resultImage && (
-          <div className="mainContent animate-up center">
-            <img 
-  src={resultImage} 
-  className="final-img shadow-card"  
-  alt="Final Result" 
-/>
-<p style={{ fontSize: "1.1rem", marginTop: "15px", fontWeight: "800", color: "#1e293b" }}>
-  📱 Mantén presionado para guardar
-</p>
-            <div className="share-panel">
-              <p className="share-label">Comparte el momento</p>
-              <div className="share-btns">
-                <button onClick={shareLink} className="s-btn">LINK</button>
-                <button onClick={shareWhatsApp} className="s-btn wa">WA</button>
-                <button onClick={shareFacebook} className="s-btn fb">FB</button>
-              </div>
-            </div>
-            <div className="footer-actions">
-              <button className="btn-sub" onClick={() => window.location.reload()}>Volver a tomar</button>
-            </div>
-          </div>
-        )}
+  <div className="mainContent animate-up center">
+    <img 
+      src={resultImage} 
+      className="final-img shadow-card"  
+      alt="Final Result" 
+    />
+    <p style={{ fontSize: "1.1rem", marginTop: "15px", fontWeight: "800", color: "#1e293b" }}>
+      📱 Mantén presionado para guardar
+    </p>
+
+    {/* ✅ 광고주 모집 문구 및 이메일 추가 */}
+    <div style={{ 
+      marginTop: '12px', 
+      padding: '12px 0', 
+      fontSize: '0.85rem', 
+      color: '#64748b',
+      borderTop: '1px solid #e2e8f0',
+      width: '100%'
+    }}>
+      <p style={{ marginBottom: '4px', fontWeight: '700' }}>¿Tu marca aquí?</p>
+      <a 
+        href="mailto:kangsyoutube@naver.com?subject=[Snapi] Consulta de Publicidad" 
+        style={{ color: '#2563eb', textDecoration: 'underline' }}
+      >
+        kangsyoutube@naver.com
+      </a>
+    </div>
+
+    <div className="share-panel" style={{ marginTop: '15px' }}>
+      <p className="share-label">Comparte el momento</p>
+      <div className="share-btns">
+        <button onClick={shareLink} className="s-btn">LINK</button>
+        <button onClick={shareWhatsApp} className="s-btn wa">WA</button>
+        <button onClick={shareFacebook} className="s-btn fb">FB</button>
+      </div>
+    </div>
+    
+    <div className="footer-actions">
+      <button className="btn-sub" onClick={() => window.location.reload()}>Volver a tomar</button>
+    </div>
+  </div>
+)}
 
         <canvas ref={canvasRef} style={{ display: "none" }} />
 
